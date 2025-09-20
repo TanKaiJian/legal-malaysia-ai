@@ -9,6 +9,7 @@ import { Send, User, Bot, Loader2 } from "lucide-react";
 import { readFilesAsBase64, isAllowedDocumentOrImage, formatFileSize } from "@/lib/file";
 import { UploadPicker } from "@/components/UploadPicker";
 import { FileChip } from "@/components/FileChip";
+import { EditDocumentModal } from "@/components/EditDocumentModal";
 
 interface Message {
   id: string;
@@ -20,6 +21,7 @@ interface Message {
 interface UploadedFile {
   file: File;
   status: 'idle' | 'uploading' | 'done' | 'error';
+  editedText?: string;
 }
 
 export default function Chatbot() {
@@ -34,6 +36,7 @@ export default function Chatbot() {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [editingFile, setEditingFile] = useState<{ file: File; text: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -140,15 +143,30 @@ export default function Chatbot() {
       ));
 
       try {
-        const filesData = await readFilesAsBase64([file]);
-        const { base64 } = filesData[0];
+        // Find the current uploaded file after state update
+        const currentUploadedFile = uploadedFiles.find((uf, idx) => idx === fileIndex);
+        let contentToAnalyze: string;
+        
+        if (currentUploadedFile?.editedText) {
+          // Use edited text if available
+          contentToAnalyze = currentUploadedFile.editedText;
+        } else {
+          // Use original file content
+          const filesData = await readFilesAsBase64([file]);
+          contentToAnalyze = filesData[0].base64;
+        }
         
         // Use safe API call with fallback data
         const result = await safeApiCall(
-          () => client.queries.analyzeDocument({ 
-            fileName: file.name, 
-            fileBase64: base64 
-          }),
+          () => currentUploadedFile?.editedText 
+            ? client.queries.analyzeDocument({ 
+                fileName: file.name, 
+                text: contentToAnalyze 
+              })
+            : client.queries.analyzeDocument({ 
+                fileName: file.name, 
+                fileBase64: contentToAnalyze 
+              }),
           {
             summary: `Mock analysis of ${file.name}: This appears to be a legal document with standard contractual terms. Key areas include payment terms, liability clauses, and termination conditions.`,
             keyPoints: [
@@ -195,6 +213,54 @@ export default function Chatbot() {
 
   const handleRemoveFile = (index: number) => {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleEditFile = async (index: number) => {
+    const uploadedFile = uploadedFiles[index];
+    if (!uploadedFile) return;
+
+    try {
+      // For text files, read as text; for others, show placeholder
+      let initialText = uploadedFile.editedText || '';
+      
+      if (!initialText) {
+        if (uploadedFile.file.type === 'text/plain') {
+          initialText = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsText(uploadedFile.file);
+          });
+        } else {
+          initialText = `[Content of ${uploadedFile.file.name}]\n\nThis is a placeholder for the document content. You can edit this text and it will be used instead of the original file content when analyzing the document.`;
+        }
+      }
+
+      setEditingFile({ file: uploadedFile.file, text: initialText });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Unable to read file content for editing",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleSaveEditedText = (newText: string) => {
+    if (!editingFile) return;
+
+    setUploadedFiles(prev => prev.map(uf => 
+      uf.file.name === editingFile.file.name && uf.file.size === editingFile.file.size
+        ? { ...uf, editedText: newText }
+        : uf
+    ));
+    
+    setEditingFile(null);
+    
+    toast({
+      title: "Document updated",
+      description: "Your edits have been saved and will be used for analysis"
+    });
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -286,6 +352,7 @@ export default function Chatbot() {
                     file={uploadedFile.file}
                     status={uploadedFile.status}
                     onRemove={() => handleRemoveFile(index)}
+                    onEdit={() => handleEditFile(index)}
                   />
                 ))}
               </div>
@@ -333,6 +400,17 @@ export default function Chatbot() {
           </p>
         </div>
       </div>
+
+      {/* Edit Document Modal */}
+      {editingFile && (
+        <EditDocumentModal
+          file={editingFile.file}
+          initialText={editingFile.text}
+          isOpen={!!editingFile}
+          onSave={handleSaveEditedText}
+          onClose={() => setEditingFile(null)}
+        />
+      )}
     </div>
   );
 }
