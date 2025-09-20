@@ -7,6 +7,20 @@
       "permissions": {
         "setting": "open"
       }
+    },
+    "/toKendra": {
+      "name": "/toKendra",
+      "lambdaFunction": "passTextToKendra",
+      "permissions": {
+        "setting": "open"
+      }
+    },
+    "/toBedrock": {
+      "name": "/toBedrock",
+      "lambdaFunction": "sendKendraSnippetsToBedrock",
+      "permissions": {
+        "setting": "open"
+      }
     }
   }
 }

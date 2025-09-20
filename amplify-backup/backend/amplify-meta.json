@@ -1,15 +1,53 @@
 {
   "providers": {
     "awscloudformation": {
-      "AuthRoleName": "amplify-legalmalaysiaai-dev-80b5c-authRole",
-      "UnauthRoleArn": "arn:aws:iam::794961776506:role/amplify-legalmalaysiaai-dev-80b5c-unauthRole",
-      "AuthRoleArn": "arn:aws:iam::794961776506:role/amplify-legalmalaysiaai-dev-80b5c-authRole",
+      "AuthRoleName": "amplify-legalmalaysiaai-devmhtwo-c620a-authRole",
+      "UnauthRoleArn": "arn:aws:iam::794961776506:role/amplify-legalmalaysiaai-devmhtwo-c620a-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::794961776506:role/amplify-legalmalaysiaai-devmhtwo-c620a-authRole",
       "Region": "ap-southeast-1",
-      "DeploymentBucketName": "amplify-legalmalaysiaai-dev-80b5c-deployment",
-      "UnauthRoleName": "amplify-legalmalaysiaai-dev-80b5c-unauthRole",
-      "StackName": "amplify-legalmalaysiaai-dev-80b5c",
-      "StackId": "arn:aws:cloudformation:ap-southeast-1:794961776506:stack/amplify-legalmalaysiaai-dev-80b5c/1743c690-9616-11f0-afaa-06511a159c4d",
+      "DeploymentBucketName": "amplify-legalmalaysiaai-devmhtwo-c620a-deployment",
+      "UnauthRoleName": "amplify-legalmalaysiaai-devmhtwo-c620a-unauthRole",
+      "StackName": "amplify-legalmalaysiaai-devmhtwo-c620a",
+      "StackId": "arn:aws:cloudformation:ap-southeast-1:794961776506:stack/amplify-legalmalaysiaai-devmhtwo-c620a/22774960-9648-11f0-a58a-06d27e97b677",
       "AmplifyAppId": "dr0f7aj6sudiz"
+    }
+  },
+  "api": {
+    "testAPI": {
+      "dependsOn": [
+        {
+          "attributes": [
+            "Name",
+            "Arn"
+          ],
+          "category": "function",
+          "resourceName": "testLambda"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "API Gateway"
+    }
+  },
+  "function": {
+    "bedrockTesting": {
+      "build": true,
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "passTextToKendra": {
+      "build": true,
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "sendKendraSnippetsToBedrock": {
+      "build": true,
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "testLambda": {
+      "build": true,
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
     }
   }
 }

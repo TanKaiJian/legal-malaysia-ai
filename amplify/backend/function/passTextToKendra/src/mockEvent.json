@@ -1,0 +1,9 @@
+{
+  "text": "This is a sample legal document text that needs to be indexed in Kendra.",
+  "documentMetadata": {
+    "title": "Sample Legal Document",
+    "documentType": "legal",
+    "language": "English",
+    "createdDate": "2025-09-21"
+  }
+}

@@ -47,5 +47,41 @@
         "testAPI": {}
       }
     }
+  },
+  "devmhtwo": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-legalmalaysiaai-devmhtwo-c620a-authRole",
+      "UnauthRoleArn": "arn:aws:iam::794961776506:role/amplify-legalmalaysiaai-devmhtwo-c620a-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::794961776506:role/amplify-legalmalaysiaai-devmhtwo-c620a-authRole",
+      "Region": "ap-southeast-1",
+      "DeploymentBucketName": "amplify-legalmalaysiaai-devmhtwo-c620a-deployment",
+      "UnauthRoleName": "amplify-legalmalaysiaai-devmhtwo-c620a-unauthRole",
+      "StackName": "amplify-legalmalaysiaai-devmhtwo-c620a",
+      "StackId": "arn:aws:cloudformation:ap-southeast-1:794961776506:stack/amplify-legalmalaysiaai-devmhtwo-c620a/22774960-9648-11f0-a58a-06d27e97b677",
+      "AmplifyAppId": "dr0f7aj6sudiz"
+    },
+    "categories": {
+      "function": {
+        "bedrockTesting": {
+          "deploymentBucketName": "amplify-legalmalaysiaai-devmhtwo-c620a-deployment",
+          "s3Key": "amplify-builds/bedrockTesting-556266796a4a36734f62-build.zip"
+        },
+        "passTextToKendra": {
+          "deploymentBucketName": "amplify-legalmalaysiaai-devmhtwo-c620a-deployment",
+          "s3Key": "amplify-builds/passTextToKendra-522b676c652b71426a78-build.zip"
+        },
+        "sendKendraSnippetsToBedrock": {
+          "deploymentBucketName": "amplify-legalmalaysiaai-devmhtwo-c620a-deployment",
+          "s3Key": "amplify-builds/sendKendraSnippetsToBedrock-36626e2b38585667674b-build.zip"
+        },
+        "testLambda": {
+          "deploymentBucketName": "amplify-legalmalaysiaai-devmhtwo-c620a-deployment",
+          "s3Key": "amplify-builds/testLambda-2b79394c386b6d4a2b34-build.zip"
+        }
+      },
+      "api": {
+        "testAPI": {}
+      }
+    }
   }
 }

@@ -9,6 +9,22 @@
           ],
           "category": "function",
           "resourceName": "testLambda"
+        },
+        {
+          "attributes": [
+            "Name",
+            "Arn"
+          ],
+          "category": "function",
+          "resourceName": "passTextToKendra"
+        },
+        {
+          "attributes": [
+            "Name",
+            "Arn"
+          ],
+          "category": "function",
+          "resourceName": "sendKendraSnippetsToBedrock"
         }
       ],
       "providerPlugin": "awscloudformation",
