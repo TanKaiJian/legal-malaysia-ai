@@ -1,226 +1,249 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { client, safeApiCall } from "@/lib/amplify-client";
-import { 
-  Upload, 
-  FileText, 
-  AlertTriangle, 
-  Download, 
-  Copy, 
-  CheckCircle,
-  Loader2,
-  Shield,
-  Eye
-} from "lucide-react";
-import { readFileAsBase64, isValidFileType, formatFileSize } from "@/lib/file";
+import { FileText, AlertTriangle, Download, Copy, Loader2, Play } from "lucide-react";
+import { readFilesAsBase64, isAllowedDocumentOrImage, formatFileSize } from "@/lib/file";
+import { UploadPicker } from "@/components/UploadPicker";
+import { FileChip } from "@/components/FileChip";
 
-interface Clause {
-  title: string;
-  snippet: string;
-  reason: string;
+interface FileAnalysisResult {
+  clauses: Array<{
+    title: string;
+    snippet: string;
+    reason: string;
+  }>;
+  risks: Array<{
+    risk: string;
+    severity: 'low' | 'medium' | 'high';
+    explanation: string;
+    recommendedAction: string;
+  }>;
 }
 
-interface Risk {
-  risk: string;
-  severity: 'low' | 'medium' | 'high';
-  explanation: string;
-  recommendedAction: string;
-}
-
-interface AnalysisResults {
-  clauses: Clause[];
-  risks: Risk[];
-  summary: string;
+interface SelectedFile {
+  file: File;
+  status: 'idle' | 'uploading' | 'done' | 'error';
 }
 
 export default function DocumentAnalyzer() {
-  const [dragActive, setDragActive] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [results, setResults] = useState<AnalysisResults | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [analysisResults, setAnalysisResults] = useState<Record<string, FileAnalysisResult>>({});
+  const [activeTab, setActiveTab] = useState<string>('');
   const { toast } = useToast();
 
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
+  const handleFilesSelected = (files: File[]) => {
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    const validFiles: File[] = [];
     
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      handleFileSelection(file);
+    for (const file of files) {
+      if (!isAllowedDocumentOrImage(file)) {
+        toast({
+          title: "Invalid file type",
+          description: `${file.name}: Please upload PDF, DOCX, TXT, or image files only.`,
+          variant: "destructive"
+        });
+        continue;
+      }
+      
+      if (file.size > MAX_FILE_SIZE) {
+        toast({
+          title: "File too large",
+          description: `${file.name}: File size exceeds 10MB limit.`,
+          variant: "destructive"
+        });
+        continue;
+      }
+      
+      validFiles.push(file);
+    }
+
+    if (validFiles.length === 0) return;
+
+    const newSelectedFiles = validFiles.map(file => ({
+      file,
+      status: 'idle' as const
+    }));
+    
+    setSelectedFiles(prev => [...prev, ...newSelectedFiles]);
+    
+    // Set first file as active tab if no tab is active
+    if (!activeTab && validFiles.length > 0) {
+      setActiveTab(validFiles[0].name);
     }
   };
 
-  const handleFileSelection = (file: File) => {
-    if (!isValidFileType(file)) {
-      toast({
-        title: "Invalid file type",
-        description: "Please upload PDF, DOCX, TXT, or image files only.",
-        variant: "destructive"
+  const handleRemoveFile = (index: number) => {
+    const removedFile = selectedFiles[index];
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    
+    // Remove from results
+    if (removedFile) {
+      setAnalysisResults(prev => {
+        const newResults = { ...prev };
+        delete newResults[removedFile.file.name];
+        return newResults;
       });
-      return;
-    }
-
-    setUploadedFile(file);
-    setResults(null);
-  };
-
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      handleFileSelection(file);
+      
+      // Update active tab if removed file was active
+      if (activeTab === removedFile.file.name) {
+        const remainingFiles = selectedFiles.filter((_, i) => i !== index);
+        setActiveTab(remainingFiles.length > 0 ? remainingFiles[0].file.name : '');
+      }
     }
   };
 
-  const analyzeDocument = async () => {
-    if (!uploadedFile) return;
+  const handleAnalyzeAll = async () => {
+    if (selectedFiles.length === 0) return;
 
     setIsAnalyzing(true);
+    const results: Record<string, FileAnalysisResult> = {};
+
     try {
-      const base64 = await readFileAsBase64(uploadedFile);
+      // Process files sequentially
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const selectedFile = selectedFiles[i];
+        const { file } = selectedFile;
+        
+        // Update status to uploading
+        setSelectedFiles(prev => prev.map((sf, idx) => 
+          idx === i ? { ...sf, status: 'uploading' } : sf
+        ));
+
+        try {
+          const filesData = await readFilesAsBase64([file]);
+          const { base64 } = filesData[0];
+          
+          // Use safe API calls with fallback data
+          const [clausesResult, risksResult] = await Promise.all([
+            safeApiCall(
+              () => client.queries.extractClauses({ fileBase64: base64 }),
+              {
+                clauses: [
+                  {
+                    title: "Payment Terms",
+                    snippet: "Payment shall be made within 30 days of invoice date...",
+                    reason: "Standard commercial payment clause"
+                  },
+                  {
+                    title: "Liability Limitation", 
+                    snippet: "In no event shall either party be liable for indirect damages...",
+                    reason: "Limits potential liability exposure"
+                  },
+                  {
+                    title: "Termination Clause",
+                    snippet: "Either party may terminate with 30 days written notice...",
+                    reason: "Provides exit mechanism for both parties"
+                  }
+                ]
+              }
+            ),
+            safeApiCall(
+              () => client.queries.assessRisks({ fileBase64: base64 }),
+              {
+                risks: [
+                  {
+                    risk: "Broad liability limitation",
+                    severity: "medium" as const,
+                    explanation: "The liability clause may be too broad and could leave you unprotected",
+                    recommendedAction: "Consider adding exceptions for gross negligence"
+                  },
+                  {
+                    risk: "Automatic renewal clause",
+                    severity: "high" as const,
+                    explanation: "Contract automatically renews without explicit consent",
+                    recommendedAction: "Negotiate for explicit renewal approval requirement"
+                  },
+                  {
+                    risk: "Unclear dispute resolution",
+                    severity: "low" as const,
+                    explanation: "Dispute resolution mechanism is not clearly defined",
+                    recommendedAction: "Add specific arbitration or mediation clause"
+                  }
+                ]
+              }
+            )
+          ]);
+
+          if (clausesResult.data && risksResult.data) {
+            results[file.name] = {
+              clauses: clausesResult.data.clauses || [],
+              risks: risksResult.data.risks || []
+            };
+
+            // Update status to done
+            setSelectedFiles(prev => prev.map((sf, idx) => 
+              idx === i ? { ...sf, status: 'done' } : sf
+            ));
+          }
+        } catch (error) {
+          console.error(`Error analyzing ${file.name}:`, error);
+          
+          // Update status to error
+          setSelectedFiles(prev => prev.map((sf, idx) => 
+            idx === i ? { ...sf, status: 'error' } : sf
+          ));
+          
+          toast({
+            title: "Analysis failed",
+            description: `Unable to analyze ${file.name}`,
+            variant: "destructive"
+          });
+        }
+      }
+
+      setAnalysisResults(results);
       
-      // Use safe API calls with fallback data
-      const [clausesResult, risksResult] = await Promise.all([
-        safeApiCall(
-          () => client.queries.extractClauses({ fileBase64: base64 }),
-          {
-            clauses: [
-              {
-                title: "Payment Terms",
-                snippet: "Payment shall be made within thirty (30) days of invoice date...",
-                reason: "Critical for cash flow management and financial planning"
-              },
-              {
-                title: "Limitation of Liability", 
-                snippet: "In no event shall either party's liability exceed the total amount...",
-                reason: "Caps financial exposure and defines risk boundaries"
-              },
-              {
-                title: "Termination Clause",
-                snippet: "Either party may terminate this agreement with thirty (30) days written notice...",
-                reason: "Provides exit mechanism and notice requirements"
-              }
-            ]
-          }
-        ),
-        safeApiCall(
-          () => client.queries.assessRisks({ fileBase64: base64 }),
-          {
-            risks: [
-              {
-                risk: "Unlimited Liability Exposure",
-                severity: "high" as const,
-                explanation: "The contract may not include sufficient liability limitations.",
-                recommendedAction: "Add liability cap clause limiting damages to contract value"
-              },
-              {
-                risk: "Vague Payment Terms",
-                severity: "medium" as const,
-                explanation: "Payment schedule lacks specific penalties for late payment.",
-                recommendedAction: "Include late payment penalties and interest charges"
-              }
-            ]
-          }
-        )
-      ]);
-
-      if (clausesResult.data && risksResult.data) {
-        const clausesData = clausesResult.data as any;
-        const risksData = risksResult.data as any;
-        
-        const analysisResults: AnalysisResults = {
-          clauses: clausesData.clauses || [],
-          risks: risksData.risks || [],
-          summary: `Analysis of ${uploadedFile.name} completed. Found ${clausesData.clauses?.length || 0} key clauses and identified ${risksData.risks?.length || 0} potential risks.`
-        };
-
-        setResults(analysisResults);
-        
+      const successCount = Object.keys(results).length;
+      if (successCount > 0) {
         toast({
-          title: "Analysis complete",
-          description: `Successfully analyzed ${uploadedFile.name}`
+          title: "Analysis completed",
+          description: `Successfully analyzed ${successCount} of ${selectedFiles.length} files`
         });
       }
-    } catch (error) {
-      console.error('Error analyzing document:', error);
-      toast({
-        title: "Analysis failed",
-        description: "Unable to analyze the document. Please ensure the backend is deployed and try again.",
-        variant: "destructive"
-      });
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'high':
-        return 'bg-destructive text-destructive-foreground';
-      case 'medium':
-        return 'bg-warning text-warning-foreground';
-      case 'low':
-        return 'bg-success text-success-foreground';
-      default:
-        return 'bg-secondary text-secondary-foreground';
-    }
+  const handleCopySummary = (fileName: string) => {
+    const result = analysisResults[fileName];
+    if (!result) return;
+    
+    const summary = `Document Analysis Summary - ${fileName}\n\nKey Clauses:\n${result.clauses.map(c => `• ${c.title}: ${c.snippet}`).join('\n')}\n\nRisks:\n${result.risks.map(r => `• ${r.risk} (${r.severity}): ${r.explanation}`).join('\n')}`;
+    
+    navigator.clipboard.writeText(summary);
+    toast({
+      title: "Summary copied",
+      description: `Analysis summary for ${fileName} copied to clipboard`
+    });
   };
 
-  const getSeverityIcon = (severity: string) => {
-    switch (severity) {
-      case 'high':
-        return <AlertTriangle className="w-4 h-4" />;
-      case 'medium':
-        return <Eye className="w-4 h-4" />;
-      case 'low':
-        return <CheckCircle className="w-4 h-4" />;
-      default:
-        return <Shield className="w-4 h-4" />;
-    }
-  };
-
-  const copySummary = () => {
-    if (results) {
-      const summary = `Document Analysis Summary\n\n${results.summary}\n\nKey Clauses (${results.clauses.length}):\n${results.clauses.map((clause, index) => `${index + 1}. ${clause.title}: ${clause.snippet}`).join('\n\n')}\n\nRisk Assessment (${results.risks.length}):\n${results.risks.map((risk, index) => `${index + 1}. ${risk.risk} (${risk.severity.toUpperCase()}): ${risk.explanation}`).join('\n\n')}`;
-      
-      navigator.clipboard.writeText(summary);
-      toast({
-        title: "Summary copied",
-        description: "Analysis summary copied to clipboard"
-      });
-    }
-  };
-
-  const downloadSummary = () => {
-    if (results && uploadedFile) {
-      const summary = `Document Analysis Summary - ${uploadedFile.name}\nGenerated on: ${new Date().toLocaleString()}\n\n${results.summary}\n\nKEY CLAUSES (${results.clauses.length}):\n${'='.repeat(50)}\n${results.clauses.map((clause, index) => `${index + 1}. ${clause.title}\n   ${clause.snippet}\n   Reason: ${clause.reason}\n`).join('\n')}\n\nRISK ASSESSMENT (${results.risks.length}):\n${'='.repeat(50)}\n${results.risks.map((risk, index) => `${index + 1}. ${risk.risk} (${risk.severity.toUpperCase()})\n   ${risk.explanation}\n   Recommended Action: ${risk.recommendedAction}\n`).join('\n')}`;
-      
-      const blob = new Blob([summary], { type: 'text/plain' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = `${uploadedFile.name}_analysis.txt`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    }
+  const handleDownloadSummary = (fileName: string) => {
+    const result = analysisResults[fileName];
+    if (!result) return;
+    
+    const summary = `Document Analysis Summary - ${fileName}\n\nKey Clauses:\n${result.clauses.map(c => `• ${c.title}: ${c.snippet}`).join('\n')}\n\nRisks:\n${result.risks.map(r => `• ${r.risk} (${r.severity}): ${r.explanation}`).join('\n')}`;
+    
+    const blob = new Blob([summary], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `analysis-${fileName}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast({
+      title: "Summary downloaded",
+      description: `Analysis summary for ${fileName} saved as text file`
+    });
   };
 
   return (
@@ -230,201 +253,198 @@ export default function DocumentAnalyzer() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">Document Analyzer</h1>
           <p className="text-muted-foreground text-lg">
-            Upload legal documents to extract key clauses and assess potential risks
+            Upload multiple legal documents to extract key clauses and assess potential risks
           </p>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Upload Section */}
-          <div className="lg:col-span-1">
-            <Card className="shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Upload className="w-5 h-5" />
-                  Upload Document
-                </CardTitle>
-                <CardDescription>
-                  Drag and drop or click to select PDF, DOCX, TXT, or image files
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div
-                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                    dragActive
-                      ? 'border-primary bg-primary-light'
-                      : 'border-border hover:border-primary hover:bg-primary-light/50'
-                  }`}
-                  onDragEnter={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDragOver={handleDrag}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".pdf,.docx,.doc,.txt,.png,.jpg,.jpeg,.gif"
-                    onChange={handleFileInput}
-                    className="hidden"
-                  />
-                  
-                  {uploadedFile ? (
-                    <div className="space-y-4">
-                      <FileText className="w-12 h-12 mx-auto text-primary" />
-                      <div>
-                        <p className="font-medium">{uploadedFile.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {formatFileSize(uploadedFile.size)}
-                        </p>
-                      </div>
-                      <Button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          analyzeDocument();
-                        }}
-                        disabled={isAnalyzing}
-                        className="w-full"
-                      >
-                        {isAnalyzing ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Analyzing...
-                          </>
-                        ) : (
-                          'Analyze Document'
-                        )}
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <Upload className="w-12 h-12 mx-auto text-muted-foreground" />
-                      <div>
-                        <p className="text-lg font-medium">Drop your document here</p>
-                        <p className="text-sm text-muted-foreground">
-                          or click to browse files
-                        </p>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Supports PDF, DOCX, TXT, and image files up to 10MB
-                      </p>
-                    </div>
-                  )}
+        {/* Upload Area */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              Document Upload
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
+              <div className="space-y-4">
+                <div className="w-12 h-12 mx-auto bg-primary/10 rounded-lg flex items-center justify-center">
+                  <FileText className="w-6 h-6 text-primary" />
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+                <div>
+                  <h3 className="text-lg font-medium mb-2">Upload your legal documents</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Select multiple files to analyze them all at once
+                  </p>
+                  <UploadPicker
+                    mode="document"
+                    multiple={true}
+                    onFilesSelected={handleFilesSelected}
+                    disabled={isAnalyzing}
+                  />
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Supports PDF, DOCX, TXT, and image files (max 10MB each)
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            {selectedFiles.length > 0 && (
+              <div className="mt-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-medium">Selected Files</h4>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">
+                      {selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''} • {formatFileSize(selectedFiles.reduce((sum, sf) => sum + sf.file.size, 0))}
+                    </span>
+                    <Button 
+                      onClick={handleAnalyzeAll}
+                      disabled={isAnalyzing}
+                      size="sm"
+                    >
+                      {isAnalyzing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Analyzing...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4 mr-2" />
+                          Analyze All
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedFiles.map((selectedFile, index) => (
+                    <FileChip
+                      key={`${selectedFile.file.name}-${index}`}
+                      file={selectedFile.file}
+                      status={selectedFile.status}
+                      onRemove={() => handleRemoveFile(index)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-          {/* Results Section */}
-          <div className="lg:col-span-2">
-            {results ? (
-              <div className="space-y-6">
-                {/* Summary and Actions */}
-                <Card className="shadow-card">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle>Analysis Summary</CardTitle>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={copySummary}>
-                          <Copy className="w-4 h-4 mr-2" />
-                          Copy
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={downloadSummary}>
-                          <Download className="w-4 h-4 mr-2" />
-                          Download
-                        </Button>
+        {/* Analysis Results */}
+        {Object.keys(analysisResults).length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Analysis Results</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 h-auto">
+                  {Object.keys(analysisResults).map((fileName) => (
+                    <TabsTrigger 
+                      key={fileName} 
+                      value={fileName}
+                      className="truncate max-w-[200px] text-xs"
+                      title={fileName}
+                    >
+                      {fileName.length > 15 ? `${fileName.slice(0, 12)}...` : fileName}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+                
+                {Object.entries(analysisResults).map(([fileName, result]) => (
+                  <TabsContent key={fileName} value={fileName} className="mt-6">
+                    <div className="space-y-6">
+                      {/* File Summary Header */}
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-medium">{fileName}</h3>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCopySummary(fileName)}
+                          >
+                            <Copy className="w-4 h-4 mr-2" />
+                            Copy
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDownloadSummary(fileName)}
+                          >
+                            <Download className="w-4 h-4 mr-2" />
+                            Download
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="grid lg:grid-cols-2 gap-6">
+                        {/* Key Clauses */}
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                              <FileText className="w-5 h-5" />
+                              Key Clauses ({result.clauses.length})
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            {result.clauses.map((clause, index) => (
+                              <div key={index} className="p-4 border border-border rounded-lg">
+                                <h4 className="font-medium mb-2">{clause.title}</h4>
+                                <p className="text-sm text-muted-foreground mb-2 italic">
+                                  "{clause.snippet}"
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {clause.reason}
+                                </p>
+                              </div>
+                            ))}
+                          </CardContent>
+                        </Card>
+
+                        {/* Risks & Red Flags */}
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                              <AlertTriangle className="w-5 h-5" />
+                              Risks & Red Flags ({result.risks.length})
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            {result.risks.map((risk, index) => (
+                              <Alert key={index} className="border-l-4 border-l-red-500">
+                                <AlertDescription>
+                                  <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <h4 className="font-medium">{risk.risk}</h4>
+                                      <Badge variant={
+                                        risk.severity === 'high' ? 'destructive' : 
+                                        risk.severity === 'medium' ? 'default' : 
+                                        'secondary'
+                                      }>
+                                        {risk.severity.toUpperCase()}
+                                      </Badge>
+                                    </div>
+                                    <p className="text-sm text-muted-foreground">
+                                      {risk.explanation}
+                                    </p>
+                                    <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-950/20 rounded text-sm">
+                                      <strong>Recommended Action:</strong> {risk.recommendedAction}
+                                    </div>
+                                  </div>
+                                </AlertDescription>
+                              </Alert>
+                            ))}
+                          </CardContent>
+                        </Card>
                       </div>
                     </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-muted-foreground leading-relaxed">
-                      {results.summary}
-                    </p>
-                  </CardContent>
-                </Card>
-
-                {/* Key Clauses */}
-                <Card className="shadow-card">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <FileText className="w-5 h-5" />
-                      Key Clauses ({results.clauses.length})
-                    </CardTitle>
-                    <CardDescription>
-                      Important contractual terms and conditions found in the document
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {results.clauses.map((clause, index) => (
-                        <div key={index} className="border border-border rounded-lg p-4 bg-card-elevated">
-                          <h4 className="font-semibold text-lg mb-2">{clause.title}</h4>
-                          <p className="text-muted-foreground mb-3 leading-relaxed">
-                            "{clause.snippet}"
-                          </p>
-                          <div className="flex items-start gap-2">
-                            <CheckCircle className="w-4 h-4 text-success mt-0.5 flex-shrink-0" />
-                            <p className="text-sm text-muted-foreground">
-                              <strong>Why it matters:</strong> {clause.reason}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Risk Assessment */}
-                <Card className="shadow-card">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <AlertTriangle className="w-5 h-5" />
-                      Risk Assessment ({results.risks.length})
-                    </CardTitle>
-                    <CardDescription>
-                      Potential legal risks and recommended actions to address them
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {results.risks.map((risk, index) => (
-                        <div key={index} className="border border-border rounded-lg p-4 bg-card-elevated">
-                          <div className="flex items-start justify-between gap-4 mb-3">
-                            <h4 className="font-semibold text-lg">{risk.risk}</h4>
-                            <Badge className={`${getSeverityColor(risk.severity)} flex items-center gap-1`}>
-                              {getSeverityIcon(risk.severity)}
-                              {risk.severity.toUpperCase()}
-                            </Badge>
-                          </div>
-                          <p className="text-muted-foreground mb-3 leading-relaxed">
-                            {risk.explanation}
-                          </p>
-                          <Separator className="my-3" />
-                          <div className="flex items-start gap-2">
-                            <Shield className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                            <div>
-                              <p className="text-sm font-medium mb-1">Recommended Action:</p>
-                              <p className="text-sm text-muted-foreground">{risk.recommendedAction}</p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            ) : (
-              <Card className="shadow-card h-96 flex items-center justify-center">
-                <CardContent className="text-center">
-                  <FileText className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">No Document Analyzed</h3>
-                  <p className="text-muted-foreground">
-                    Upload a document to see detailed analysis results here
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </div>
+                  </TabsContent>
+                ))}
+              </Tabs>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

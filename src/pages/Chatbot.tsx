@@ -5,8 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { client, safeApiCall } from "@/lib/amplify-client";
-import { Send, Upload, FileText, User, Bot, Loader2 } from "lucide-react";
-import { readFileAsBase64, isValidFileType, formatFileSize } from "@/lib/file";
+import { Send, User, Bot, Loader2 } from "lucide-react";
+import { readFilesAsBase64, isAllowedDocumentOrImage, formatFileSize } from "@/lib/file";
+import { UploadPicker } from "@/components/UploadPicker";
+import { FileChip } from "@/components/FileChip";
 
 interface Message {
   id: string;
@@ -16,9 +18,8 @@ interface Message {
 }
 
 interface UploadedFile {
-  name: string;
-  size: number;
-  status: 'ready' | 'analyzing' | 'done';
+  file: File;
+  status: 'idle' | 'uploading' | 'done' | 'error';
 }
 
 export default function Chatbot() {
@@ -32,8 +33,7 @@ export default function Chatbot() {
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -93,72 +93,108 @@ export default function Chatbot() {
     }
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!isValidFileType(file)) {
-      toast({
-        title: "Invalid file type",
-        description: "Please upload PDF, DOCX, TXT, or image files only.",
-        variant: "destructive"
-      });
-      return;
+  const handleFilesSelected = async (files: File[]) => {
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    const validFiles: File[] = [];
+    
+    for (const file of files) {
+      if (!isAllowedDocumentOrImage(file)) {
+        toast({
+          title: "Invalid file type",
+          description: `${file.name}: Please upload PDF, DOCX, TXT, or image files only.`,
+          variant: "destructive"
+        });
+        continue;
+      }
+      
+      if (file.size > MAX_FILE_SIZE) {
+        toast({
+          title: "File too large",
+          description: `${file.name}: File size exceeds 10MB limit.`,
+          variant: "destructive"
+        });
+        continue;
+      }
+      
+      validFiles.push(file);
     }
 
-    setUploadedFile({
-      name: file.name,
-      size: file.size,
-      status: 'analyzing'
-    });
+    if (validFiles.length === 0) return;
 
-    try {
-      const base64 = await readFileAsBase64(file);
+    // Add files to state
+    const newUploadedFiles = validFiles.map(file => ({
+      file,
+      status: 'idle' as const
+    }));
+    
+    setUploadedFiles(prev => [...prev, ...newUploadedFiles]);
+
+    // Process files sequentially
+    for (let i = 0; i < validFiles.length; i++) {
+      const file = validFiles[i];
+      const fileIndex = uploadedFiles.length + i;
       
-      // Use safe API call with fallback data
-      const result = await safeApiCall(
-        () => client.queries.analyzeDocument({ 
-          fileName: file.name, 
-          fileBase64: base64 
-        }),
-        {
-          summary: `Mock analysis of ${file.name}: This appears to be a legal document with standard contractual terms. Key areas include payment terms, liability clauses, and termination conditions.`,
-          keyPoints: [
-            "Payment terms: Standard commercial terms",
-            "Liability limitations present", 
-            "Termination clause: Standard notice requirements",
-            "Malaysian law jurisdiction specified"
-          ]
+      // Update status to uploading
+      setUploadedFiles(prev => prev.map((uf, idx) => 
+        idx === fileIndex ? { ...uf, status: 'uploading' } : uf
+      ));
+
+      try {
+        const filesData = await readFilesAsBase64([file]);
+        const { base64 } = filesData[0];
+        
+        // Use safe API call with fallback data
+        const result = await safeApiCall(
+          () => client.queries.analyzeDocument({ 
+            fileName: file.name, 
+            fileBase64: base64 
+          }),
+          {
+            summary: `Mock analysis of ${file.name}: This appears to be a legal document with standard contractual terms. Key areas include payment terms, liability clauses, and termination conditions.`,
+            keyPoints: [
+              "Payment terms: Standard commercial terms",
+              "Liability limitations present", 
+              "Termination clause: Standard notice requirements",
+              "Malaysian law jurisdiction specified"
+            ]
+          }
+        );
+
+        if (result.data) {
+          const data = result.data as any;
+          const analysisMessage: Message = {
+            id: Date.now().toString() + i,
+            type: 'assistant',
+            content: `📄 **Document Analysis: ${file.name}**\n\n${data.summary || 'Analysis completed successfully.'}\n\n**Key Points:**\n${data.keyPoints?.map((point: string) => `• ${point}`).join('\n') || 'No key points extracted'}`,
+            timestamp: new Date()
+          };
+
+          setMessages(prev => [...prev, analysisMessage]);
+          
+          // Update status to done
+          setUploadedFiles(prev => prev.map((uf, idx) => 
+            idx === fileIndex ? { ...uf, status: 'done' } : uf
+          ));
         }
-      );
-
-      if (result.data) {
-        const data = result.data as any;
-        const analysisMessage: Message = {
-          id: Date.now().toString(),
-          type: 'assistant',
-          content: `📄 **Document Analysis: ${file.name}**\n\n${data.summary || 'Analysis completed successfully.'}\n\n**Key Points:**\n${data.keyPoints?.map((point: string) => `• ${point}`).join('\n') || 'No key points extracted'}`,
-          timestamp: new Date()
-        };
-
-        setMessages(prev => [...prev, analysisMessage]);
-        setUploadedFile(prev => prev ? { ...prev, status: 'done' } : null);
-
+      } catch (error) {
+        console.error('Error analyzing document:', error);
+        
+        // Update status to error
+        setUploadedFiles(prev => prev.map((uf, idx) => 
+          idx === fileIndex ? { ...uf, status: 'error' } : uf
+        ));
+        
         toast({
-          title: "Document analyzed successfully",
-          description: `${file.name} has been processed and added to the conversation.`
+          title: "Analysis failed",
+          description: `Unable to analyze ${file.name}. Please try again.`,
+          variant: "destructive"
         });
       }
-    } catch (error) {
-      console.error('Error analyzing document:', error);
-      setUploadedFile(null);
-      
-      toast({
-        title: "Analysis failed",
-        description: "Unable to analyze the document. Please try again or check that the backend is deployed.",
-        variant: "destructive"
-      });
     }
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -232,27 +268,28 @@ export default function Chatbot() {
         </div>
       </div>
 
-      {/* File Upload Status */}
-      {uploadedFile && (
+      {/* Selected Files */}
+      {uploadedFiles.length > 0 && (
         <div className="border-t border-border bg-card/50 p-4">
           <div className="max-w-4xl mx-auto">
-            <Card>
-              <CardContent className="flex items-center justify-between p-4">
-                <div className="flex items-center gap-3">
-                  <FileText className="w-5 h-5 text-primary" />
-                  <div>
-                    <p className="text-sm font-medium">{uploadedFile.name}</p>
-                    <p className="text-xs text-muted-foreground">{formatFileSize(uploadedFile.size)}</p>
-                  </div>
-                </div>
-                <Badge variant={uploadedFile.status === 'done' ? 'default' : 'secondary'}>
-                  {uploadedFile.status === 'analyzing' && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
-                  {uploadedFile.status === 'ready' && 'Ready for analysis'}
-                  {uploadedFile.status === 'analyzing' && 'Analyzing...'}
-                  {uploadedFile.status === 'done' && 'Analysis complete'}
-                </Badge>
-              </CardContent>
-            </Card>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium">Recent uploads</h3>
+                <span className="text-xs text-muted-foreground">
+                  {uploadedFiles.length} file{uploadedFiles.length !== 1 ? 's' : ''} • {formatFileSize(uploadedFiles.reduce((sum, uf) => sum + uf.file.size, 0))}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {uploadedFiles.map((uploadedFile, index) => (
+                  <FileChip
+                    key={`${uploadedFile.file.name}-${index}`}
+                    file={uploadedFile.file}
+                    status={uploadedFile.status}
+                    onRemove={() => handleRemoveFile(index)}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -261,22 +298,14 @@ export default function Chatbot() {
       <div className="border-t border-border bg-card/50 backdrop-blur-sm p-4">
         <div className="max-w-4xl mx-auto">
           <div className="flex gap-3">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.docx,.doc,.txt,.png,.jpg,.jpeg,.gif"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => fileInputRef.current?.click()}
-              className="flex-shrink-0"
-              disabled={isLoading}
-            >
-              <Upload className="w-4 h-4" />
-            </Button>
+            <div className="flex-shrink-0">
+              <UploadPicker
+                mode="document"
+                multiple={true}
+                onFilesSelected={handleFilesSelected}
+                disabled={isLoading}
+              />
+            </div>
             <div className="flex-1 flex gap-2">
               <Input
                 value={inputValue}
@@ -300,7 +329,7 @@ export default function Chatbot() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground mt-2 text-center">
-            Upload documents (PDF, DOCX, TXT, images) or ask questions about Malaysian legal matters
+            Upload multiple documents (PDF, DOCX, TXT, images) or ask questions about Malaysian legal matters
           </p>
         </div>
       </div>

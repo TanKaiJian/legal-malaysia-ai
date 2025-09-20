@@ -41,6 +41,30 @@ export const formatFileSize = (bytes: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
+export async function readFilesAsBase64(files: File[]): Promise<{ file: File; base64: string }[]> {
+  const toBase64 = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const results: { file: File; base64: string }[] = [];
+  for (const f of files) {
+    const base64 = await toBase64(f);
+    results.push({ file: f, base64 });
+  }
+  return results;
+}
+
+export function isAllowedDocumentOrImage(file: File): boolean {
+  const allowedExt = [".pdf", ".doc", ".docx", ".txt"];
+  const okDoc = allowedExt.some(ext => file.name.toLowerCase().endsWith(ext));
+  const okImg = file.type.startsWith("image/");
+  return okDoc || okImg;
+}
+
 export const isValidFileType = (file: File): boolean => {
   const validTypes = [
     'application/pdf',
