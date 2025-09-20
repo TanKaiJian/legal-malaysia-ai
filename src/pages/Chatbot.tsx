@@ -61,56 +61,89 @@ export default function Chatbot() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim()) return;
+  async function queryKendra(userQuestion: string) {
+    try {
+      const res = await fetch(
+        "https://f9jekjb575.execute-api.ap-southeast-1.amazonaws.com/devmhtwo/toKendra",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userQuestion }),
+        }
+      );
+      const data = await res.json();
+      return data.snippets || [];
+    } catch (error) {
+      console.error("Kendra query failed:", error);
+      return [];
+    }
+  }
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      type: "user",
-      content: inputValue,
+  async function queryBedrock(userQuestion: string, snippets: string[]) {
+    try {
+      const res = await fetch(
+        "https://f9jekjb575.execute-api.ap-southeast-1.amazonaws.com/devmhtwo/toBedrock",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userQuestion, snippets }),
+        }
+      );
+      const data = await res.json();
+      return data.answer?.choices?.[0]?.message?.content || "No answer from Bedrock.";
+    } catch (error) {
+      console.error("Bedrock query failed:", error);
+      return "I’m currently unable to answer your question. Please try again later.";
+    }
+  }
+
+
+const handleSendMessage = async () => {
+  if (!inputValue.trim()) return;
+
+  const userMessage: Message = {
+    id: Date.now().toString(),
+    type: "user",
+    content: inputValue,
+    timestamp: new Date(),
+  };
+
+  // Add user's message to chat
+  setMessages((prev) => [...prev, userMessage]);
+  setInputValue("");
+  setIsLoading(true);
+
+  try {
+    // 1️⃣ Query Kendra to get context snippets
+    const snippets = await queryKendra(inputValue);
+
+    // 2️⃣ Query Bedrock using the question + Kendra snippets
+    const bedrockAnswer = await queryBedrock(inputValue, snippets);
+
+    // 3️⃣ Add Bedrock's response as assistant message
+    const assistantMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      type: "assistant",
+      content: bedrockAnswer,
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
-    setInputValue("");
-    setIsLoading(true);
+    setMessages((prev) => [...prev, assistantMessage]);
+  } catch (error) {
+    console.error("Unexpected error:", error);
+    const errorMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      type: "assistant",
+      content:
+        "I'm currently experiencing some technical difficulties. Please try again later.",
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, errorMessage]);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
-    try {
-      // Use safe API call with fallback data
-      const result = await safeApiCall(
-        () => client.queries.sayHello({ name: inputValue }),
-        `Hello, ${inputValue}! I'm your MyLegal AI assistant. I can help you understand legal documents and answer questions about Malaysian law. Note: This is running in preview mode - deploy the backend for full AI functionality.`
-      );
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        type: "assistant",
-        content:
-          result.data ||
-          "I apologize, but I encountered an issue processing your request. Please try again.",
-        timestamp: new Date(),
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
-
-      if (result.error) {
-        console.warn("API call handled gracefully:", result.error);
-      }
-    } catch (error) {
-      console.error("Unexpected error:", error);
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        type: "assistant",
-        content:
-          "I'm currently experiencing some technical difficulties. This is a preview version - please deploy the backend to enable full functionality.",
-        timestamp: new Date(),
-      };
-
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleFilesSelected = async (files: File[]) => {
     const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB

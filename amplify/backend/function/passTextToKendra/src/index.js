@@ -6,8 +6,25 @@ const KENDRA_INDEX_ID = "fb7cec6f-9181-495d-b003-72cd41f37f6d";
 
 exports.handler = async (event) => {
   try {
-    const question = event.userQuestion || event.body?.userQuestion;
-    if (!question) throw new Error("No userQuestion provided");
+    // const question = event.userQuestion || event.body?.userQuestion;
+    let body = {};
+    
+    if (event.body) {
+      try {
+        body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+      } catch (parseError) {
+        console.error('Failed to parse body:', parseError);
+        throw new Error('Invalid JSON in request body');
+      }
+    }
+    
+    const question = event.userQuestion || body.userQuestion || event.queryStringParameters?.userQuestion;
+    
+    console.log('Extracted question:', question);
+    
+    if (!question || question.trim() === '') {
+      throw new Error("No userQuestion provided or question is empty");
+    }
 
     const params = {
       IndexId: KENDRA_INDEX_ID,
@@ -30,6 +47,11 @@ exports.handler = async (event) => {
 
     return {
       statusCode: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Methods": "OPTIONS,POST,GET"
+      },
       body: JSON.stringify({
         question,
         snippets,
@@ -40,6 +62,11 @@ exports.handler = async (event) => {
     console.error(err);
     return {
       statusCode: 500,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Methods": "OPTIONS,POST,GET"
+      },
       body: JSON.stringify({ error: err.message })
     };
   }

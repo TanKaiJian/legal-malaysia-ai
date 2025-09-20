@@ -68,11 +68,11 @@
         },
         "passTextToKendra": {
           "deploymentBucketName": "amplify-legalmalaysiaai-devmhtwo-c620a-deployment",
-          "s3Key": "amplify-builds/passTextToKendra-522b676c652b71426a78-build.zip"
+          "s3Key": "amplify-builds/passTextToKendra-46356a6933765475766e-build.zip"
         },
         "sendKendraSnippetsToBedrock": {
           "deploymentBucketName": "amplify-legalmalaysiaai-devmhtwo-c620a-deployment",
-          "s3Key": "amplify-builds/sendKendraSnippetsToBedrock-36626e2b38585667674b-build.zip"
+          "s3Key": "amplify-builds/sendKendraSnippetsToBedrock-666f772f4a31686c6b4a-build.zip"
         },
         "testLambda": {
           "deploymentBucketName": "amplify-legalmalaysiaai-devmhtwo-c620a-deployment",
