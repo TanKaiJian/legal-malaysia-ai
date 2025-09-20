@@ -1,7 +1,6 @@
 import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Upload, Camera } from "lucide-react";
-import { useIsMobile } from "@/hooks/use-mobile";
 
 interface UploadPickerProps {
   mode: "document" | "photo";
@@ -13,7 +12,6 @@ interface UploadPickerProps {
 export function UploadPicker({ mode, multiple, onFilesSelected, disabled }: UploadPickerProps) {
   const documentInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
-  const isMobile = useIsMobile();
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
@@ -48,32 +46,28 @@ export function UploadPicker({ mode, multiple, onFilesSelected, disabled }: Uplo
         <span className="sm:hidden">Upload</span>
       </Button>
 
-      {/* Photo/Camera Button - Only show on mobile */}
-      {isMobile && (
-        <>
-          <input
-            ref={photoInputRef}
-            type="file"
-            multiple={multiple}
-            accept="image/*"
-            capture="environment"
-            onChange={handleFileChange}
-            className="hidden"
-            aria-label="Take photo"
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => photoInputRef.current?.click()}
-            disabled={disabled}
-            className="flex items-center gap-2 min-h-[40px]"
-          >
-            <Camera className="w-4 h-4" />
-            <span className="hidden sm:inline">Take photo</span>
-            <span className="sm:hidden">Photo</span>
-          </Button>
-        </>
-      )}
+      {/* Photo/Camera Button */}
+      <input
+        ref={photoInputRef}
+        type="file"
+        multiple={multiple}
+        accept="image/*"
+        capture="environment"
+        onChange={handleFileChange}
+        className="hidden"
+        aria-label="Take photo"
+      />
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => photoInputRef.current?.click()}
+        disabled={disabled}
+        className="flex items-center gap-2 min-h-[40px]"
+      >
+        <Camera className="w-4 h-4" />
+        <span className="hidden sm:inline">Take photo</span>
+        <span className="sm:hidden">Photo</span>
+      </Button>
     </div>
   );
 }

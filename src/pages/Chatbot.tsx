@@ -9,7 +9,6 @@ import { Send, User, Bot, Loader2 } from "lucide-react";
 import { readFilesAsBase64, isAllowedDocumentOrImage, formatFileSize } from "@/lib/file";
 import { UploadPicker } from "@/components/UploadPicker";
 import { FileChip } from "@/components/FileChip";
-import { EditDocumentModal } from "@/components/EditDocumentModal";
 
 interface Message {
   id: string;
@@ -21,7 +20,6 @@ interface Message {
 interface UploadedFile {
   file: File;
   status: 'idle' | 'uploading' | 'done' | 'error';
-  editedText?: string;
 }
 
 export default function Chatbot() {
@@ -36,7 +34,6 @@ export default function Chatbot() {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [editingFile, setEditingFile] = useState<{ file: File; index: number } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -143,23 +140,14 @@ export default function Chatbot() {
       ));
 
       try {
-        const uploadedFile = uploadedFiles[fileIndex];
-        let contentToAnalyze;
-        
-        if (uploadedFile.editedText) {
-          // Use edited text content
-          contentToAnalyze = uploadedFile.editedText;
-        } else {
-          // Use original file content as base64
-          const filesData = await readFilesAsBase64([file]);
-          contentToAnalyze = filesData[0].base64;
-        }
+        const filesData = await readFilesAsBase64([file]);
+        const { base64 } = filesData[0];
         
         // Use safe API call with fallback data
         const result = await safeApiCall(
           () => client.queries.analyzeDocument({ 
             fileName: file.name, 
-            fileBase64: uploadedFile.editedText ? undefined : contentToAnalyze
+            fileBase64: base64 
           }),
           {
             summary: `Mock analysis of ${file.name}: This appears to be a legal document with standard contractual terms. Key areas include payment terms, liability clauses, and termination conditions.`,
@@ -207,22 +195,6 @@ export default function Chatbot() {
 
   const handleRemoveFile = (index: number) => {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const handleEditFile = (index: number) => {
-    const file = uploadedFiles[index];
-    setEditingFile({ file: file.file, index });
-  };
-
-  const handleSaveEditedText = (newText: string) => {
-    if (editingFile) {
-      setUploadedFiles(prev => prev.map((file, index) => 
-        index === editingFile.index 
-          ? { ...file, editedText: newText }
-          : file
-      ));
-      setEditingFile(null);
-    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -314,7 +286,6 @@ export default function Chatbot() {
                     file={uploadedFile.file}
                     status={uploadedFile.status}
                     onRemove={() => handleRemoveFile(index)}
-                    onEdit={() => handleEditFile(index)}
                   />
                 ))}
               </div>
@@ -362,14 +333,6 @@ export default function Chatbot() {
           </p>
         </div>
       </div>
-
-      {/* Edit Document Modal */}
-      <EditDocumentModal
-        file={editingFile?.file || null}
-        isOpen={!!editingFile}
-        onClose={() => setEditingFile(null)}
-        onSave={handleSaveEditedText}
-      />
     </div>
   );
 }

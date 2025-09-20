@@ -10,7 +10,6 @@ import { FileText, AlertTriangle, Download, Copy, Loader2, Play } from "lucide-r
 import { readFilesAsBase64, isAllowedDocumentOrImage, formatFileSize } from "@/lib/file";
 import { UploadPicker } from "@/components/UploadPicker";
 import { FileChip } from "@/components/FileChip";
-import { EditDocumentModal } from "@/components/EditDocumentModal";
 
 interface FileAnalysisResult {
   clauses: Array<{
@@ -26,18 +25,16 @@ interface FileAnalysisResult {
   }>;
 }
 
-interface UploadedFile {
+interface SelectedFile {
   file: File;
   status: 'idle' | 'uploading' | 'done' | 'error';
-  editedText?: string;
 }
 
 export default function DocumentAnalyzer() {
-  const [selectedFiles, setSelectedFiles] = useState<UploadedFile[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResults, setAnalysisResults] = useState<Record<string, FileAnalysisResult>>({});
   const [activeTab, setActiveTab] = useState<string>('');
-  const [editingFile, setEditingFile] = useState<{ file: File; index: number } | null>(null);
   const { toast } = useToast();
 
   const handleFilesSelected = (files: File[]) => {
@@ -101,22 +98,6 @@ export default function DocumentAnalyzer() {
     }
   };
 
-  const handleEditFile = (index: number) => {
-    const file = selectedFiles[index];
-    setEditingFile({ file: file.file, index });
-  };
-
-  const handleSaveEditedText = (newText: string) => {
-    if (editingFile) {
-      setSelectedFiles(prev => prev.map((file, index) => 
-        index === editingFile.index 
-          ? { ...file, editedText: newText }
-          : file
-      ));
-      setEditingFile(null);
-    }
-  };
-
   const handleAnalyzeAll = async () => {
     if (selectedFiles.length === 0) return;
 
@@ -135,25 +116,13 @@ export default function DocumentAnalyzer() {
         ));
 
         try {
-          const selectedFile = selectedFiles[i];
-          let contentToAnalyze;
-          
-          if (selectedFile.editedText) {
-            // Use edited text content
-            contentToAnalyze = selectedFile.editedText;
-          } else {
-            // Use original file content as base64
-            const filesData = await readFilesAsBase64([file]);
-            contentToAnalyze = filesData[0].base64;
-          }
+          const filesData = await readFilesAsBase64([file]);
+          const { base64 } = filesData[0];
           
           // Use safe API calls with fallback data
           const [clausesResult, risksResult] = await Promise.all([
             safeApiCall(
-              () => client.queries.extractClauses({ 
-                text: selectedFile.editedText ? contentToAnalyze : undefined,
-                fileBase64: selectedFile.editedText ? undefined : contentToAnalyze 
-              }),
+              () => client.queries.extractClauses({ fileBase64: base64 }),
               {
                 clauses: [
                   {
@@ -175,10 +144,7 @@ export default function DocumentAnalyzer() {
               }
             ),
             safeApiCall(
-              () => client.queries.assessRisks({ 
-                text: selectedFile.editedText ? contentToAnalyze : undefined,
-                fileBase64: selectedFile.editedText ? undefined : contentToAnalyze 
-              }),
+              () => client.queries.assessRisks({ fileBase64: base64 }),
               {
                 risks: [
                   {
@@ -357,7 +323,6 @@ export default function DocumentAnalyzer() {
                       file={selectedFile.file}
                       status={selectedFile.status}
                       onRemove={() => handleRemoveFile(index)}
-                      onEdit={() => handleEditFile(index)}
                     />
                   ))}
                 </div>
@@ -480,14 +445,6 @@ export default function DocumentAnalyzer() {
             </CardContent>
           </Card>
         )}
-
-        {/* Edit Document Modal */}
-        <EditDocumentModal
-          file={editingFile?.file || null}
-          isOpen={!!editingFile}
-          onClose={() => setEditingFile(null)}
-          onSave={handleSaveEditedText}
-        />
       </div>
     </div>
   );
