@@ -1,4 +1,7 @@
-
+/* Amplify Params - DO NOT EDIT
+	ENV
+	REGION
+Amplify Params - DO NOT EDIT */
 const { BedrockRuntimeClient, InvokeModelCommand } = require("@aws-sdk/client-bedrock-runtime");
 const { KendraClient, QueryCommand } = require("@aws-sdk/client-kendra");
 
