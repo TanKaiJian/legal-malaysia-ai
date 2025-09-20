@@ -58,17 +58,15 @@ export function FileChip({ file, status, onRemove, onEdit }: FileChipProps) {
       
       <div className="flex items-center gap-1">
         {getStatusIcon()}
-        {onEdit && !isImage && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onEdit}
-            className="h-5 w-5 p-0 hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-900"
-            aria-label={`Edit ${file.name}`}
-          >
-            <Edit3 className="w-3 h-3" />
-          </Button>
-        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onEdit || (() => {})}
+          className="h-5 w-5 p-0 hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-900"
+          aria-label={`Edit ${file.name}`}
+        >
+          <Edit3 className="w-3 h-3" />
+        </Button>
         <Button
           variant="ghost"
           size="sm"
