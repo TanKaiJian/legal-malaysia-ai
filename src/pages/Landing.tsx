@@ -77,7 +77,13 @@ export default function Landing() {
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button asChild variant="hero" size="lg" className="text-lg px-8 py-6">
+            {/* UPDATED: Match "Analyze Document" styling */}
+            <Button
+              asChild
+              variant="outline"
+              size="lg"
+              className="text-lg px-8 py-6 bg-white/10 border-white/20 text-white hover:bg-white/20"
+            >
               <Link to="/chatbot">
                 <MessageSquare className="w-5 h-5 mr-2" />
                 Try AI Chatbot
@@ -229,7 +235,13 @@ export default function Landing() {
                 Start Analysis
               </Link>
             </Button>
-            <Button asChild variant="outline" size="lg" className="text-lg px-8 py-6 border-white/20 text-white hover:bg-white/10">
+            {/* UPDATED: Match "Start Analysis" styling */}
+            <Button
+              asChild
+              variant="hero"
+              size="lg"
+              className="text-lg px-8 py-6 bg-white text-primary hover:bg-white/90"
+            >
               <Link to="/chatbot">
                 <MessageSquare className="w-5 h-5 mr-2" />
                 Chat with AI
