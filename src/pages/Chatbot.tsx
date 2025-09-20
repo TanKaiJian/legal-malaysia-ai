@@ -3,9 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { client, safeApiCall } from "@/lib/amplify-client";
-import { Send, User, Bot, Loader2 } from "lucide-react";
+import { Send, User, Bot, Loader2, CheckCircle, AlertCircle, FileText } from "lucide-react";
 import {
   readFilesAsBase64,
   isAllowedDocumentOrImage,
@@ -14,6 +15,7 @@ import {
 import { UploadPicker } from "@/components/UploadPicker";
 import { FileChip } from "@/components/FileChip";
 import { EditDocumentModal } from "@/components/EditDocumentModal";
+import { extractText, UnifiedExtractionResult } from "@/services/textExtractor";
 
 interface Message {
   id: string;
@@ -24,8 +26,11 @@ interface Message {
 
 interface UploadedFile {
   file: File;
-  status: "idle" | "uploading" | "done" | "error";
+  status: "idle" | "extracting" | "uploading" | "done" | "error";
   editedText?: string;
+  extractedText?: string;
+  extractionResult?: UnifiedExtractionResult;
+  progress?: number;
 }
 
 export default function Chatbot() {
@@ -143,104 +148,168 @@ export default function Chatbot() {
 
     setUploadedFiles((prev) => [...prev, ...newUploadedFiles]);
 
-    // Process files sequentially
-    for (let i = 0; i < validFiles.length; i++) {
-      const file = validFiles[i];
-      const fileIndex = uploadedFiles.length + i;
+    // Start extracting text from uploaded files
+    await extractTextFromFiles(uploadedFiles.length, validFiles);
+  };
 
-      // Update status to uploading
-      setUploadedFiles((prev) =>
-        prev.map((uf, idx) =>
-          idx === fileIndex
-            ? {
-                ...uf,
-                status: "uploading",
-              }
-            : uf
-        )
-      );
+  const extractTextFromFiles = async (startIndex: number, files: File[]) => {
+    for (let i = 0; i < files.length; i++) {
+      const fileIndex = startIndex + i;
+      const file = files[i];
+      
+      // Update status to extracting
+      setUploadedFiles(prev => prev.map((f, idx) =>
+        idx === fileIndex ? { ...f, status: 'extracting', progress: 0 } : f
+      ));
 
       try {
-        const currentUploadedFile = uploadedFiles.find(
-          (uf, idx) => idx === fileIndex
-        );
-        let base64Content: string;
-
-        if (currentUploadedFile?.editedText) {
-          // Convert edited text into base64
-          base64Content = btoa(
-            unescape(encodeURIComponent(currentUploadedFile.editedText))
-          );
-        } else {
-          const filesData = await readFilesAsBase64([file]);
-          base64Content = filesData[0].base64;
-        }
-
-        // ✅ Always send fileBase64 (never "text")
-        const result = await safeApiCall(
-          () =>
-            client.queries.analyzeDocument({
-              fileName: file.name,
-              fileBase64: base64Content,
-            }),
-          {
-            summary: `Mock analysis of ${file.name}: This appears to be a legal document with standard contractual terms. Key areas include payment terms, liability clauses, and termination conditions.`,
-            keyPoints: [
-              "Payment terms: Standard commercial terms",
-              "Liability limitations present",
-              "Termination clause: Standard notice requirements",
-              "Malaysian law jurisdiction specified",
-            ],
+        const result = await extractText(file, {
+          fallbackToOCR: true,
+          ocrOptions: {
+            logger: (info) => {
+              setUploadedFiles(prev => prev.map((f, idx) =>
+                idx === fileIndex ? { ...f, progress: info.progress } : f
+              ));
+            }
           }
-        );
+        });
 
-        if (result.data) {
-          const data = result.data as any;
-          const analysisMessage: Message = {
-            id: Date.now().toString() + i,
-            type: "assistant",
-            content: `📄 **Document Analysis: ${
-              file.name
-            }**\n\n${data.summary ||
-              "Analysis completed successfully."}\n\n**Key Points:**\n${data.keyPoints
-              ?.map((point: string) => `• ${point}`)
-              .join("\n") || "No key points extracted"}`,
-            timestamp: new Date(),
-          };
+        // Update with extraction results
+        setUploadedFiles(prev => prev.map((f, idx) =>
+          idx === fileIndex ? { 
+            ...f, 
+            status: 'idle', 
+            extractedText: result.text,
+            extractionResult: result,
+            progress: 100 
+          } : f
+        ));
 
-          setMessages((prev) => [...prev, analysisMessage]);
+        toast({
+          title: "Text extracted successfully",
+          description: `Extracted ${result.text.length} characters from ${file.name}`,
+        });
 
-          setUploadedFiles((prev) =>
-            prev.map((uf, idx) =>
-              idx === fileIndex
-                ? {
-                    ...uf,
-                    status: "done",
-                  }
-                : uf
-            )
-          );
-        }
+        // Automatically analyze the document after text extraction
+        await analyzeDocument(fileIndex, result.text);
+
       } catch (error) {
-        console.error("Error analyzing document:", error);
+        setUploadedFiles(prev => prev.map((f, idx) =>
+          idx === fileIndex ? { 
+            ...f, 
+            status: 'error',
+            progress: 0
+          } : f
+        ));
+
+        toast({
+          title: "Text extraction failed",
+          description: `Unable to extract text from ${file.name}`,
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  const analyzeDocument = async (fileIndex: number, extractedText?: string) => {
+    const uploadedFile = uploadedFiles[fileIndex];
+    if (!uploadedFile) return;
+
+    // Update status to uploading
+    setUploadedFiles((prev) =>
+      prev.map((uf, idx) =>
+        idx === fileIndex
+          ? {
+              ...uf,
+              status: "uploading",
+            }
+          : uf
+      )
+    );
+
+    try {
+      let base64Content: string;
+
+      if (uploadedFile.editedText) {
+        // Use edited text
+        base64Content = btoa(
+          unescape(encodeURIComponent(uploadedFile.editedText))
+        );
+      } else if (extractedText) {
+        // Use extracted text
+        base64Content = btoa(
+          unescape(encodeURIComponent(extractedText))
+        );
+      } else {
+        // Fallback to original file
+        const filesData = await readFilesAsBase64([uploadedFile.file]);
+        base64Content = filesData[0].base64;
+      }
+
+      // ✅ Always send fileBase64 (never "text")
+      const result = await safeApiCall(
+        () =>
+          client.queries.analyzeDocument({
+            fileName: uploadedFile.file.name,
+            fileBase64: base64Content,
+          }),
+        {
+          summary: `Analysis of ${uploadedFile.file.name}: This appears to be a legal document with standard contractual terms. Key areas include payment terms, liability clauses, and termination conditions.`,
+          keyPoints: [
+            "Payment terms: Standard commercial terms",
+            "Liability limitations present",
+            "Termination clause: Standard notice requirements",
+            "Malaysian law jurisdiction specified",
+          ],
+        }
+      );
+
+      if (result.data) {
+        const data = result.data as any;
+        const analysisMessage: Message = {
+          id: Date.now().toString() + fileIndex,
+          type: "assistant",
+          content: `📄 **Document Analysis: ${
+            uploadedFile.file.name
+          }**\n\n${data.summary ||
+            "Analysis completed successfully."}\n\n**Key Points:**\n${data.keyPoints
+            ?.map((point: string) => `• ${point}`)
+            .join("\n") || "No key points extracted"}`,
+          timestamp: new Date(),
+        };
+
+        setMessages((prev) => [...prev, analysisMessage]);
 
         setUploadedFiles((prev) =>
           prev.map((uf, idx) =>
             idx === fileIndex
               ? {
                   ...uf,
-                  status: "error",
+                  status: "done",
                 }
               : uf
           )
         );
-
-        toast({
-          title: "Analysis failed",
-          description: `Unable to analyze ${file.name}. Please try again.`,
-          variant: "destructive",
-        });
       }
+    } catch (error) {
+      console.error("Error analyzing document:", error);
+
+      setUploadedFiles((prev) =>
+        prev.map((uf, idx) =>
+          idx === fileIndex
+            ? {
+                ...uf,
+                status: "error",
+              }
+            : uf
+        )
+      );
+
+      toast({
+        title: "Analysis failed",
+        description: `Unable to analyze ${uploadedFile.file.name}. Please try again.`,
+        variant: "destructive",
+      });
     }
   };
 
@@ -253,11 +322,13 @@ export default function Chatbot() {
     if (!uploadedFile) return;
 
     try {
-      // For text files, read as text; for others, show placeholder
       let initialText = uploadedFile.editedText || "";
 
       if (!initialText) {
-        if (uploadedFile.file.type === "text/plain") {
+        // Use extracted text if available
+        if (uploadedFile.extractedText) {
+          initialText = uploadedFile.extractedText;
+        } else if (uploadedFile.file.type === "text/plain") {
           initialText = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = () => resolve(reader.result as string);
@@ -297,6 +368,21 @@ export default function Chatbot() {
       title: "Document updated",
       description: "Your edits have been saved and will be used for analysis",
     });
+  };
+
+  const getStatusIcon = (status: UploadedFile['status']) => {
+    switch (status) {
+      case 'idle':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'extracting':
+        return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />;
+      case 'uploading':
+        return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />;
+      case 'done':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'error':
+        return <AlertCircle className="h-4 w-4 text-red-500" />;
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -408,15 +494,59 @@ export default function Chatbot() {
                   )}
                 </span>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="space-y-2">
                 {uploadedFiles.map((uploadedFile, index) => (
-                  <FileChip
-                    key={`${uploadedFile.file.name}-${index}`}
-                    file={uploadedFile.file}
-                    status={uploadedFile.status}
-                    onRemove={() => handleRemoveFile(index)}
-                    onEdit={() => handleEditFile(index)}
-                  />
+                  <div key={`${uploadedFile.file.name}-${index}`} className="flex items-center gap-3 p-3 border rounded-lg bg-background">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-blue-500" />
+                      {getStatusIcon(uploadedFile.status)}
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{uploadedFile.file.name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {(uploadedFile.file.size / 1024).toFixed(1)} KB
+                        {uploadedFile.extractedText && (
+                          <> • {uploadedFile.extractedText.length} characters extracted</>
+                        )}
+                        {uploadedFile.editedText && (
+                          <> • Text edited</>
+                        )}
+                      </div>
+                      
+                      {uploadedFile.status === 'extracting' && uploadedFile.progress !== undefined && (
+                        <Progress value={uploadedFile.progress} className="mt-2" />
+                      )}
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <Badge variant={
+                        uploadedFile.status === 'done' ? 'default' : 
+                        uploadedFile.status === 'error' ? 'destructive' : 
+                        uploadedFile.status === 'extracting' ? 'secondary' :
+                        'secondary'
+                      }>
+                        {uploadedFile.status === 'extracting' ? 'Extracting...' : uploadedFile.status}
+                      </Badge>
+                      
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => handleEditFile(index)}
+                        disabled={uploadedFile.status === 'extracting'}
+                      >
+                        Edit Text
+                      </Button>
+                      
+                      <Button 
+                        size="sm" 
+                        variant="destructive"
+                        onClick={() => handleRemoveFile(index)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>

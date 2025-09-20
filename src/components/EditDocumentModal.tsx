@@ -31,14 +31,6 @@ export function EditDocumentModal({ file, initialText, isOpen, onSave, onClose }
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between">
             <span>Edit Document - {file.name}</span>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleClose}
-              className="h-6 w-6"
-            >
-              <X className="h-4 w-4" />
-            </Button>
           </DialogTitle>
         </DialogHeader>
         
