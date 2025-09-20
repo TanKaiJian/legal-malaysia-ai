@@ -10,6 +10,7 @@ import Landing from "./pages/Landing";
 import Chatbot from "./pages/Chatbot";
 import DocumentAnalyzer from "./pages/DocumentAnalyzer";
 import Settings from "./pages/Settings";
+import TextExtractionTest from "./pages/TextExtractionTest";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
                   <Route path="/" element={<Landing />} />
                   <Route path="/chatbot" element={<Chatbot />} />
                   <Route path="/analyzer" element={<DocumentAnalyzer />} />
+                  <Route path="/text-extraction-test" element={<TextExtractionTest />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>

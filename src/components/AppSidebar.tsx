@@ -5,7 +5,8 @@ import {
   MessageSquare, 
   FileSearch, 
   Settings,
-  Scale
+  Scale,
+  TestTube2
 } from "lucide-react";
 
 import {
@@ -23,6 +24,7 @@ const items = [
   { title: "Home", url: "/", icon: Home },
   { title: "AI Chatbot", url: "/chatbot", icon: MessageSquare },
   { title: "Document Analyzer", url: "/analyzer", icon: FileSearch },
+  { title: "Text Extraction Test", url: "/text-extraction-test", icon: TestTube2 },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
