@@ -10,8 +10,13 @@ const KENDRA_INDEX_ID = "fb7cec6f-9181-495d-b003-72cd41f37f6d";
 exports.handler = async (event) => {
   try {
     // Get user input and Kendra snippets
-    const userQuestion = event.userQuestion || event.body?.userQuestion || "Hello";
-    const snippets = event.snippets || event.body?.snippets || [];
+    // const userQuestion = event.userQuestion || event.body?.userQuestion || "Hello";
+    // const snippets = event.snippets || event.body?.snippets || [];
+
+    const body = event.body ? JSON.parse(event.body) : {};
+    const userQuestion = event.userQuestion || body.userQuestion || "Hello";
+    const snippets = event.snippets || body.snippets || [];
+
 
     // Combine snippets into one text block
     const contextText = snippets.join("\n\n");
@@ -65,12 +70,22 @@ ${userQuestion}
     // Return the Bedrock answer
     return {
       statusCode: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Methods": "OPTIONS,POST,GET"
+      },
       body: JSON.stringify({ answer: result })
     };
   } catch (error) {
     console.error("Error invoking Bedrock model:", error);
     return {
       statusCode: 500,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Methods": "OPTIONS,POST,GET"
+      },
       body: JSON.stringify({ error: 'Failed to invoke Bedrock model', details: error.message })
     };
   }
