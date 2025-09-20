@@ -1,15 +1,16 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { X, FileText, Image, Loader2, Check, AlertCircle } from "lucide-react";
+import { X, FileText, Image, Loader2, Check, AlertCircle, Edit3 } from "lucide-react";
 import { formatFileSize } from "@/lib/file";
 
 interface FileChipProps {
   file: File;
   status: 'idle' | 'uploading' | 'done' | 'error';
   onRemove: () => void;
+  onEdit?: () => void;
 }
 
-export function FileChip({ file, status, onRemove }: FileChipProps) {
+export function FileChip({ file, status, onRemove, onEdit }: FileChipProps) {
   const isImage = file.type.startsWith('image/');
   const truncatedName = file.name.length > 20 
     ? `${file.name.slice(0, 10)}...${file.name.slice(-7)}` 
@@ -31,22 +32,22 @@ export function FileChip({ file, status, onRemove }: FileChipProps) {
   const getStatusColor = () => {
     switch (status) {
       case 'uploading':
-        return 'border-blue-200 bg-blue-50';
+        return 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950';
       case 'done':
-        return 'border-green-200 bg-green-50';
+        return 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950';
       case 'error':
-        return 'border-red-200 bg-red-50';
+        return 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950';
       default:
-        return 'border-gray-200 bg-gray-50';
+        return 'border-border bg-muted';
     }
   };
 
   return (
     <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-full border text-sm ${getStatusColor()}`}>
       <div className="flex items-center gap-2">
-        {isImage ? <Image className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+        {isImage ? <Image className="w-4 h-4 text-foreground" /> : <FileText className="w-4 h-4 text-foreground" />}
         <div className="flex flex-col">
-          <span className="font-medium truncate max-w-[120px]" title={file.name}>
+          <span className="font-medium truncate max-w-[120px] text-foreground" title={file.name}>
             {truncatedName}
           </span>
           <span className="text-xs text-muted-foreground">
@@ -57,11 +58,22 @@ export function FileChip({ file, status, onRemove }: FileChipProps) {
       
       <div className="flex items-center gap-1">
         {getStatusIcon()}
+        {onEdit && !isImage && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onEdit}
+            className="h-5 w-5 p-0 hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-900"
+            aria-label={`Edit ${file.name}`}
+          >
+            <Edit3 className="w-3 h-3" />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="sm"
           onClick={onRemove}
-          className="h-5 w-5 p-0 hover:bg-red-100 hover:text-red-600"
+          className="h-5 w-5 p-0 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900"
           aria-label={`Remove ${file.name}`}
         >
           <X className="w-3 h-3" />
