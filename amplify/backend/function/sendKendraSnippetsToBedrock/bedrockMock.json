@@ -1,13 +1,1 @@
-{
-  "body": 
-  {
-    "userQuestion": "What is the procedure to file a small claims case in Kuala Lumpur?",
-    "snippets": [
-        "...whether a document is relevant to the query. For example, if your index contains information about when documents were last updated, you can tell Amazon...",
-        "...those departments are given special attention when they appear in the metadata of a document. When those terms appear they are given the specified...",
-        "...you are limited to the instance types that support a processor based on the Arm architecture, such as A1 and M6g...",
-        "...Some general purpose instance types provide the ability to control processor...",
-        "...Amazon S3 internally optimizes performance for the new request rate, all requests are generally served without retries..."
-    ]
-  }   
-}
+{"userQuestion":"This document provides information about legal processes in Malaysia. The content is meant to serve as a general guide and should not be considered as legal advice. For specific legal matters, please consult with a qualified legal professional in Malaysia. The information contained herein is subject to change based on updates to Malaysian laws and regulations.","snippets":["...whether a\n                                    document\n                                    is relevant to the query. For example, if your\n                                    index contains information about when documents were last updated, you can tell Amazon...","...HR\",5 and \"Legal\",3 those departments are given special attention when they appear\n                                             in\n                                             the metadata of a document. When those terms appear they are given the specified...","...you are limited to the instance types that support a processor based on the Arm\n                                                      architecture, such as A1 and M6g...","...For more information, see Amazon EBS–optimized instances.\n                                 \n\n                                 \n                                 \n                                 Some general purpose instance types provide the ability to control processor...","...Amazon S3 internally optimizes performance for the new request rate, all requests\n                                    are generally\n                                    served without retries..."]}
