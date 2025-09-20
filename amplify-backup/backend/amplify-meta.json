@@ -1,0 +1,15 @@
+{
+  "providers": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-legalmalaysiaai-dev-80b5c-authRole",
+      "UnauthRoleArn": "arn:aws:iam::794961776506:role/amplify-legalmalaysiaai-dev-80b5c-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::794961776506:role/amplify-legalmalaysiaai-dev-80b5c-authRole",
+      "Region": "ap-southeast-1",
+      "DeploymentBucketName": "amplify-legalmalaysiaai-dev-80b5c-deployment",
+      "UnauthRoleName": "amplify-legalmalaysiaai-dev-80b5c-unauthRole",
+      "StackName": "amplify-legalmalaysiaai-dev-80b5c",
+      "StackId": "arn:aws:cloudformation:ap-southeast-1:794961776506:stack/amplify-legalmalaysiaai-dev-80b5c/1743c690-9616-11f0-afaa-06511a159c4d",
+      "AmplifyAppId": "dr0f7aj6sudiz"
+    }
+  }
+}
