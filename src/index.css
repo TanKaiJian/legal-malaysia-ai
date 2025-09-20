@@ -2,95 +2,147 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
+/* MyLegal AI Assistant Design System - Professional Government Style
+All colors MUST be HSL. Malaysian government-inspired palette.
 */
 
 @layer base {
   :root {
+    /* Base colors - Clean government style */
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 213 31% 15%;
 
+    /* Card and surfaces */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 213 31% 15%;
+    --card-elevated: 210 20% 98%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 213 31% 15%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Malaysian blue primary - professional and trustworthy */
+    --primary: 213 94% 40%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 213 94% 35%;
+    --primary-light: 213 94% 92%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Secondary - neutral professional */
+    --secondary: 210 20% 94%;
+    --secondary-foreground: 213 31% 15%;
+    --secondary-hover: 210 20% 88%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Muted tones */
+    --muted: 210 20% 96%;
+    --muted-foreground: 213 16% 50%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Accent - warm professional */
+    --accent: 35 100% 55%;
+    --accent-foreground: 0 0% 100%;
+    --accent-light: 35 100% 95%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    /* Status colors for risk assessment */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --success-light: 142 76% 94%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 38 92% 15%;
+    --warning-light: 38 92% 95%;
 
-    --radius: 0.5rem;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --destructive-light: 0 84% 95%;
 
-    --sidebar-background: 0 0% 98%;
+    /* Risk severity colors */
+    --risk-low: 142 76% 36%;
+    --risk-medium: 38 92% 50%;
+    --risk-high: 0 84% 60%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
+    /* Form elements */
+    --border: 213 27% 84%;
+    --input: 213 27% 84%;
+    --ring: 213 94% 40%;
 
-    --sidebar-primary: 240 5.9% 10%;
+    --radius: 0.75rem;
 
-    --sidebar-primary-foreground: 0 0% 98%;
+    /* Sidebar - government style */
+    --sidebar-background: 213 100% 97%;
+    --sidebar-foreground: 213 31% 25%;
+    --sidebar-primary: 213 94% 40%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 213 50% 92%;
+    --sidebar-accent-foreground: 213 31% 25%;
+    --sidebar-border: 213 27% 88%;
+    --sidebar-ring: 213 94% 40%;
 
-    --sidebar-accent: 240 4.8% 95.9%;
+    /* Gradients and effects */
+    --gradient-hero: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-hover)));
+    --gradient-card: linear-gradient(180deg, hsl(var(--card)), hsl(var(--card-elevated)));
+    --shadow-elegant: 0 4px 20px -4px hsl(var(--primary) / 0.1);
+    --shadow-card: 0 2px 10px -2px hsl(213 31% 15% / 0.1);
 
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Animation timing */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-fast: all 0.15s ease-out;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    /* Dark mode - professional night theme */
+    --background: 213 31% 6%;
+    --foreground: 210 20% 92%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 213 31% 8%;
+    --card-foreground: 210 20% 92%;
+    --card-elevated: 213 31% 10%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 213 31% 8%;
+    --popover-foreground: 210 20% 92%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 213 94% 55%;
+    --primary-foreground: 213 31% 6%;
+    --primary-hover: 213 94% 60%;
+    --primary-light: 213 94% 15%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 213 25% 15%;
+    --secondary-foreground: 210 20% 92%;
+    --secondary-hover: 213 25% 20%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 213 25% 12%;
+    --muted-foreground: 213 16% 65%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 35 100% 60%;
+    --accent-foreground: 35 100% 10%;
+    --accent-light: 35 100% 12%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --success: 142 76% 45%;
+    --success-foreground: 142 76% 10%;
+    --success-light: 142 76% 12%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 38 92% 10%;
+    --warning-light: 38 92% 12%;
+
+    --destructive: 0 84% 65%;
+    --destructive-foreground: 0 84% 10%;
+    --destructive-light: 0 84% 12%;
+
+    --border: 213 25% 20%;
+    --input: 213 25% 20%;
+    --ring: 213 94% 55%;
+
+    --sidebar-background: 213 31% 8%;
+    --sidebar-foreground: 210 20% 85%;
+    --sidebar-primary: 213 94% 55%;
+    --sidebar-primary-foreground: 213 31% 6%;
+    --sidebar-accent: 213 25% 15%;
+    --sidebar-accent-foreground: 210 20% 85%;
+    --sidebar-border: 213 25% 18%;
+    --sidebar-ring: 213 94% 55%;
+
+    --gradient-hero: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-hover)));
+    --gradient-card: linear-gradient(180deg, hsl(var(--card)), hsl(var(--card-elevated)));
+    --shadow-elegant: 0 4px 20px -4px hsl(0 0% 0% / 0.3);
+    --shadow-card: 0 2px 10px -2px hsl(0 0% 0% / 0.2);
   }
 }
 
