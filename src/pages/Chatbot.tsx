@@ -20,6 +20,25 @@ import DisclaimerModal from "@/components/ui/disclaimer";
 import { useUploadedFiles } from "@/hooks/uploadedFileContext";
 import { useNavigate } from "react-router-dom";
 import AnalysisSummaryPanel from "@/components/AnalysisSummaryPanel";
+import { ChatService } from "@/services/chatService";
+import { marked } from "marked";
+
+// Configure marked for better rendering
+marked.setOptions({
+  breaks: true, // Support line breaks
+  gfm: true, // GitHub Flavored Markdown
+});
+
+// Function to render markdown content safely
+const renderMarkdown = (content: string): string => {
+  try {
+    return marked(content) as string;
+  } catch (error) {
+    console.error('Markdown parsing error:', error);
+    // Fallback to plain text if markdown parsing fails
+    return content.replace(/\n/g, '<br>');
+  }
+};
 
 interface Message {
   id: string;
@@ -49,7 +68,7 @@ export default function Chatbot() {
       id: "1",
       type: "assistant",
       content:
-        "👋 Hello! I'm your AI Legal Assistant for Malaysian law.\n\n✨ I can help you with:\n• 📄 Analyzing legal documents and contracts\n• ⚖️ Explaining Malaysian legal procedures\n• 🔍 Identifying important clauses and potential risks\n• 💡 Providing legal guidance and recommendations\n\nFeel free to upload documents or ask me any legal questions!",
+        "👋 **Hello! I'm your AI Legal Assistant for Malaysian law.**\n\n## ✨ I can help you with:\n\n• **📄 Analyzing legal documents and contracts**\n• **⚖️ Explaining Malaysian legal procedures**\n• **🔍 Identifying important clauses and potential risks**\n• **💡 Providing legal guidance and recommendations**\n\n> **Note:** This is an AI assistant. For legally binding advice, please consult a licensed Malaysian lawyer.\n\n---\n\nFeel free to upload documents first in the **Document Analyzer**, then return here to ask me questions about your legal documents!",
       timestamp: new Date(),
     },
   ]);
@@ -121,7 +140,7 @@ export default function Chatbot() {
       {
         id: "1",
         type: "assistant",
-        content: "Hello! I'm your AI Legal Assistant. I can help you understand legal documents, answer questions about contracts, and provide guidance on Malaysian law. How can I assist you today?",
+        content: "**Hello! I'm your AI Legal Assistant.**\n\nI can help you:\n- Understand legal documents\n- Answer questions about contracts\n- Provide guidance on Malaysian law\n\n*How can I assist you today?*",
         timestamp: new Date(),
       },
     ]);
@@ -171,24 +190,6 @@ export default function Chatbot() {
 
   if (!saveUploadedFiles.length) return null;
 
-  async function queryKendra(userQuestion: string) {
-    try {
-      const res = await fetch(
-        "https://f9jekjb575.execute-api.ap-southeast-1.amazonaws.com/devmhtwo/toKendra",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userQuestion }),
-        }
-      );
-      const data = await res.json();
-      return data.snippets || [];
-    } catch (error) {
-      console.error("Kendra query failed:", error);
-      return [];
-    }
-  }
-
   async function queryBedrock(userQuestion: string, snippets: string[]) {
     try {
       const res = await fetch(
@@ -211,6 +212,16 @@ export default function Chatbot() {
 const handleSendMessage = async () => {
   if (!inputValue.trim()) return;
 
+  // Validate that we have both analysis result and uploaded files
+  if (!analysisResult) {
+    toast({
+      title: "Analysis Required",
+      description: "Please analyze your documents first before starting a conversation.",
+      variant: "destructive",
+    });
+    return;
+  }
+
   const userMessage: Message = {
     id: Date.now().toString(),
     type: "user",
@@ -220,49 +231,51 @@ const handleSendMessage = async () => {
 
   // Add user's message to chat
   setMessages((prev) => [...prev, userMessage]);
+  const currentMessage = inputValue;
   setInputValue("");
   setIsLoading(true);
 
   try {
-    // Combine user question with any extracted/edited text from uploaded files
-    const documentContext = uploadedFiles
-      .map(file => {
-        // Prefer edited text over extracted text
-        const fileContent = file.editedText || file.extractedText || '';
-        return `Document "${file.file.name}": ${fileContent}`;
-      })
-      .join('\n\n');
+    // Prepare legal text from uploaded files for context
+    const legalText = ChatService.prepareLegalText(uploadedFiles);
 
-    // Create combined context with user question and document contents
-    const fullContext = documentContext 
-      ? `${inputValue}\n\nContext from uploaded documents:\n${documentContext}`
-      : inputValue;
+    // Validate the chat request
+    ChatService.validateChatRequest(currentMessage, legalText, analysisResult);
 
-    // 1️⃣ Query Kendra with combined context
-    const snippets = await queryKendra(fullContext);
+    // Send message to the chat API
+    const chatResponse = await ChatService.sendMessage(
+      currentMessage,
+      legalText,
+      analysisResult
+    );
 
-    // 2️⃣ Query Bedrock using the question + Kendra snippets
-    const bedrockAnswer = await queryBedrock(inputValue, snippets);
-
-    // 3️⃣ Add Bedrock's response as assistant message
+    // Add the AI's response as assistant message
     const assistantMessage: Message = {
       id: (Date.now() + 1).toString(),
       type: "assistant",
-      content: bedrockAnswer,
+      content: chatResponse,
       timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, assistantMessage]);
     
   } catch (error) {
-    console.error("Unexpected error:", error);
+    console.error("Chat error:", error);
+    
+    let errorContent = "I'm currently experiencing some technical difficulties. Please try again later.";
+    
+    if (error instanceof Error) {
+      // Use the specific error message from our service
+      errorContent = error.message;
+    }
+    
     const errorMessage: Message = {
       id: (Date.now() + 1).toString(),
       type: "assistant",
-      content:
-        "I'm currently experiencing some technical difficulties. Please try again later.",
+      content: errorContent,
       timestamp: new Date(),
     };
+    
     setMessages((prev) => [...prev, errorMessage]);
   } finally {
     setIsLoading(false);
@@ -422,7 +435,7 @@ const handleSendMessage = async () => {
       );
 
       if (result.data) {
-        const data = result.data as any;
+        const data = result.data as {summary?: string; keyPoints?: string[]};
         const analysisMessage: Message = {
           id: Date.now().toString() + fileIndex,
           type: "assistant",
@@ -612,8 +625,17 @@ const handleSendMessage = async () => {
                       : "bg-gradient-to-br from-card to-card/80 border border-border/50 shadow-lg hover:shadow-xl backdrop-blur-sm"
                   }`}
                 >
-                  <div className="whitespace-pre-wrap break-words leading-relaxed">
-                    {message.content}
+                  <div className="break-words leading-relaxed">
+                    {message.type === "assistant" ? (
+                      <div 
+                        className="markdown-content"
+                        dangerouslySetInnerHTML={{ __html: renderMarkdown(message.content) }}
+                      />
+                    ) : (
+                      <div className="whitespace-pre-wrap">
+                        {message.content}
+                      </div>
+                    )}
                   </div>
                   
                   {/* Message Actions */}

@@ -37,6 +37,7 @@ import { useEffect } from "react";
 import { saveUploadedFiles, useUploadedFiles, DocumentAnalysisResult, ImportantClause, LegalRisk } from "@/hooks/uploadedFileContext";
 import { useNavigate } from "react-router-dom";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { DocumentAnalysisService } from "@/services/documentAnalysisService";
 
 interface SelectedFile {
   file: File;
@@ -297,65 +298,7 @@ export default function DocumentAnalyzer() {
     }
   };
 
-  const generateCombinedAnalysisResult = (fileNames: string[]): DocumentAnalysisResult => {
-    return {
-      important_clauses: [
-        {
-          clause_title: "Payment Terms",
-          clause_text: "Payment shall be made within thirty (30) days of receipt of invoice. Late payment may incur interest charges at the rate of 1.5% per month.",
-          summary: "Standard 30-day payment terms with late payment penalties applied monthly.",
-          relevant_law: "Malaysian Contracts Act 1950, Section 74"
-        },
-        {
-          clause_title: "Termination Clause",
-          clause_text: "Either party may terminate this agreement with ninety (90) days written notice to the other party.",
-          summary: "Either party can terminate the contract with 90 days advance written notice.",
-          relevant_law: "Malaysian Employment Act 1955, Section 12"
-        },
-        {
-          clause_title: "Intellectual Property Rights",
-          clause_text: "All intellectual property created during the term of this agreement shall remain the property of the Company.",
-          summary: "Company retains ownership of all intellectual property developed under this agreement."
-        },
-        {
-          clause_title: "Confidentiality Agreement",
-          clause_text: "All parties agree to maintain strict confidentiality regarding proprietary information disclosed during the term of this agreement.",
-          summary: "Standard confidentiality clause protecting proprietary information shared between parties."
-        }
-      ],
-      legal_risks: [
-        {
-          risk_area: "Payment Liability",
-          description: "High interest rates on late payments may be deemed excessive under Malaysian law",
-          potential_consequence: "Contract terms may be challenged in court, potentially reducing enforceability of payment penalties",
-          related_clause: "Payment Terms - Interest charges at 1.5% per month",
-          relevant_law: "Malaysian Contracts Act 1950, Section 74 - Penalty clauses"
-        },
-        {
-          risk_area: "Termination Rights",
-          description: "90-day notice period may be insufficient for critical service agreements",
-          potential_consequence: "Sudden termination could disrupt business operations and lead to financial losses",
-          related_clause: "Termination Clause - 90 days written notice"
-        },
-        {
-          risk_area: "Intellectual Property Disputes",
-          description: "Broad IP ownership clause may conflict with employee rights or pre-existing IP",
-          potential_consequence: "Potential disputes over IP ownership, especially for innovations using prior knowledge",
-          related_clause: "Intellectual Property Rights - All IP remains Company property",
-          relevant_law: "Malaysian Copyright Act 1987"
-        },
-        {
-          risk_area: "Data Privacy Compliance",
-          description: "Document handling may not comply with Malaysian Personal Data Protection Act",
-          potential_consequence: "Potential regulatory fines and legal challenges regarding data handling procedures",
-          related_clause: "Confidentiality Agreement - Information disclosure handling"
-        }
-      ],
-      notes: "This analysis combines findings from all uploaded documents and treats them as one comprehensive legal document. This summary is for informational purposes only and does not constitute legal advice. Please consult a licensed lawyer for any legally sensitive decisions.",
-      document_title: "Combined Legal Document Analysis",
-      analyzed_files: fileNames
-    };
-  };
+
 
   const handleAnalyzeAll = async () => {
     if (selectedFiles.length === 0) return;
@@ -369,12 +312,34 @@ export default function DocumentAnalyzer() {
         prev.map((sf) => ({ ...sf, status: "uploading" }))
       );
 
-      // Simulate analysis delay for the combined document
-      await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 3000)); // 2-5 seconds
+      // Collect all document texts for analysis
+      const documentTexts: string[] = [];
+      for (const selectedFile of selectedFiles) {
+        // Use edited text if available, otherwise use extracted text
+        const textToAnalyze = selectedFile.editedText || selectedFile.extractedText || "";
+        if (textToAnalyze.trim()) {
+          documentTexts.push(textToAnalyze);
+        }
+      }
+
+      // Validate document texts before sending to API
+      DocumentAnalysisService.validateDocumentTexts(documentTexts);
+
+      // Prepare and clean document texts
+      const preparedTexts = DocumentAnalysisService.prepareDocumentTexts(documentTexts);
 
       try {
-        // Generate combined analysis result for all documents
-        const combinedResult = generateCombinedAnalysisResult(fileNames);
+        // Call the real API to analyze documents
+        const analysisResult = await DocumentAnalysisService.analyzeDocuments(
+          preparedTexts,
+          "Please analyze these legal documents and identify important clauses and potential legal risks according to Malaysian law."
+        );
+
+        // Add analyzed file names to the result
+        analysisResult.analyzed_files = fileNames;
+        analysisResult.document_title = fileNames.length === 1 
+          ? `Legal Analysis: ${fileNames[0]}` 
+          : `Combined Legal Document Analysis (${fileNames.length} files)`;
 
         // Update all files to "done" status
         setSelectedFiles((prev) =>
@@ -382,23 +347,27 @@ export default function DocumentAnalyzer() {
         );
 
         // Save to context
-        setAnalysisResult(combinedResult);
+        setAnalysisResult(analysisResult);
         
         // Show success message
         toast({
           title: "Analysis Complete!",
-          description: `Successfully analyzed ${fileNames.length} document(s) as one combined legal document. You can now proceed to the chatbot.`,
+          description: `Successfully analyzed ${fileNames.length} document(s) using AI. ${analysisResult.important_clauses.length} clauses and ${analysisResult.legal_risks.length} risks identified.`,
         });
 
       } catch (error) {
+        console.error('Analysis error:', error);
+        
         // Update all files to "error" status
         setSelectedFiles((prev) =>
           prev.map((sf) => ({ ...sf, status: "error" }))
         );
 
+        const errorMessage = error instanceof Error ? error.message : "Unable to analyze the documents";
+        
         toast({
           title: "Analysis failed",
-          description: "Unable to analyze the documents",
+          description: errorMessage,
           variant: "destructive",
         });
       }

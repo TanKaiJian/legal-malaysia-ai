@@ -216,3 +216,86 @@ All colors MUST be HSL. Malaysian government-inspired palette.
 .animate-pulse-ring {
   animation: pulse-ring 2s infinite;
 }
+
+/* Enhanced markdown styling for chatbot responses */
+@layer components {
+  .markdown-content {
+    @apply text-sm leading-relaxed;
+  }
+  
+  .markdown-content h1 {
+    @apply text-lg font-bold mb-3 mt-4 text-foreground border-b border-border/30 pb-1;
+  }
+  
+  .markdown-content h2 {
+    @apply text-base font-semibold mb-2 mt-3 text-foreground;
+  }
+  
+  .markdown-content h3 {
+    @apply text-sm font-semibold mb-2 mt-3 text-foreground;
+  }
+  
+  .markdown-content p {
+    @apply mb-3 text-foreground leading-relaxed;
+  }
+  
+  .markdown-content ul, .markdown-content ol {
+    @apply mb-3 ml-4 space-y-1;
+  }
+  
+  .markdown-content li {
+    @apply text-foreground leading-relaxed;
+  }
+  
+  .markdown-content ul li {
+    @apply list-disc;
+  }
+  
+  .markdown-content ol li {
+    @apply list-decimal;
+  }
+  
+  .markdown-content strong {
+    @apply font-semibold text-foreground;
+  }
+  
+  .markdown-content em {
+    @apply italic text-foreground;
+  }
+  
+  .markdown-content code {
+    @apply bg-muted px-1.5 py-0.5 rounded text-xs font-mono text-foreground border;
+  }
+  
+  .markdown-content pre {
+    @apply bg-muted p-3 rounded-lg overflow-x-auto mb-3 border;
+  }
+  
+  .markdown-content pre code {
+    @apply bg-transparent p-0 border-0 text-sm;
+  }
+  
+  .markdown-content blockquote {
+    @apply border-l-4 border-primary/30 pl-4 italic text-muted-foreground mb-3 bg-muted/30 py-2 rounded-r;
+  }
+  
+  .markdown-content a {
+    @apply text-primary hover:text-primary-hover underline transition-colors;
+  }
+  
+  .markdown-content table {
+    @apply w-full border-collapse border border-border mb-3 text-sm;
+  }
+  
+  .markdown-content th, .markdown-content td {
+    @apply border border-border px-3 py-2 text-left;
+  }
+  
+  .markdown-content th {
+    @apply bg-muted font-semibold;
+  }
+  
+  .markdown-content hr {
+    @apply border-border my-4;
+  }
+}
