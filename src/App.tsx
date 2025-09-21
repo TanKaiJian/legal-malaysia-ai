@@ -12,10 +12,12 @@ import DocumentAnalyzer from "./pages/DocumentAnalyzer";
 import Settings from "./pages/Settings";
 import TextExtractionTest from "./pages/TextExtractionTest";
 import NotFound from "./pages/NotFound";
+import { UploadedFilesProvider } from "@/hooks/uploadedFileContext";
 
 const queryClient = new QueryClient();
 
 const App = () => (
+  <UploadedFilesProvider>
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
@@ -42,6 +44,7 @@ const App = () => (
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
+  </UploadedFilesProvider>
 );
 
 export default App;
