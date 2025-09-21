@@ -16,6 +16,9 @@ import { UploadPicker } from "@/components/UploadPicker";
 import { FileChip } from "@/components/FileChip";
 import { EditDocumentModal } from "@/components/EditDocumentModal";
 import { extractText, UnifiedExtractionResult } from "@/services/textExtractor";
+import DisclaimerModal from "@/components/ui/disclaimer";
+import { useUploadedFiles } from "@/hooks/uploadedFileContext";
+import { useNavigate } from "react-router-dom";
 
 interface Message {
   id: string;
@@ -34,6 +37,29 @@ interface UploadedFile {
 }
 
 export default function Chatbot() {
+  const { saveUploadedFiles } = useUploadedFiles();
+  const navigate = useNavigate();
+  const [showDisclaimer, setShowDisclaimer] = useState(true);
+  
+  useEffect(() => {
+    if (!saveUploadedFiles.length) {
+      // Redirect user to Document Analyzer if no docs
+      navigate("/analyzer");
+    }
+  }, [saveUploadedFiles, navigate]);
+
+  useEffect(() => {
+    const accepted = localStorage.getItem("disclaimerAccepted");
+    if (accepted) setShowDisclaimer(false);
+  }, []);
+
+  const handleAccept = () => {
+    localStorage.setItem("disclaimerAccepted", "true");
+    setShowDisclaimer(false);
+  };
+
+  if (!saveUploadedFiles.length) return null;
+  
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -427,10 +453,13 @@ const handleSendMessage = async () => {
   };
 
   return (
+  <>
+    <DisclaimerModal isOpen={showDisclaimer} onAccept={handleAccept} />
+
     <div className="h-full flex flex-col bg-background">
       {/* Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur-sm p-4">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <h1 className="text-2xl font-bold text-foreground mb-2">
             AI Legal Chatbot
           </h1>
@@ -441,9 +470,10 @@ const handleSendMessage = async () => {
         </div>
       </div>
 
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="max-w-4xl mx-auto space-y-6">
+      {/* Main Area (Chat + Sidebar) */}
+      <div className="flex flex-1 max-w-6xl mx-auto w-full">
+        {/* Chat Area */}
+        <div className="flex-1 flex flex-col overflow-y-auto p-4 space-y-6">
           {messages.map((message) => (
             <div
               key={message.id}
@@ -511,95 +541,32 @@ const handleSendMessage = async () => {
 
           <div ref={messagesEndRef} />
         </div>
-      </div>
 
-      {/* Selected Files */}
-      {uploadedFiles.length > 0 && (
-        <div className="border-t border-border bg-card/50 p-4">
-          <div className="max-w-4xl mx-auto">
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium">Recent uploads</h3>
-                <span className="text-xs text-muted-foreground">
-                  {uploadedFiles.length} file
-                  {uploadedFiles.length !== 1 ? "s" : ""} •{" "}
-                  {formatFileSize(
-                    uploadedFiles.reduce((sum, uf) => sum + uf.file.size, 0)
-                  )}
-                </span>
+        {/* Sidebar (Uploaded Files) */}
+        <div className="absolute top-18 right-0 h-[calc(90vh-10rem)] w-80 flex flex-col bg-card border border-border rounded-lg overflow-hidden">
+          <div className="p-3 border-b border-border">
+            <h3 className="text-sm font-medium">Uploaded Files</h3>
+            <span className="text-xs text-muted-foreground">
+              {saveUploadedFiles.length} file{saveUploadedFiles.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2 space-y-2">
+            {saveUploadedFiles.map((uf, index) => (
+              <div
+                key={uf.file.name}
+                className="flex items-center justify-between gap-2 p-3 border rounded-lg bg-background"
+              >
+                <span className="text-sm truncate">{uf.file.name}</span>
               </div>
-              <div className="space-y-2">
-                {uploadedFiles.map((uploadedFile, index) => (
-                  <div key={`${uploadedFile.file.name}-${index}`} className="flex items-center gap-3 p-3 border rounded-lg bg-background">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-blue-500" />
-                      {getStatusIcon(uploadedFile.status)}
-                    </div>
-                    
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">{uploadedFile.file.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {(uploadedFile.file.size / 1024).toFixed(1)} KB
-                        {uploadedFile.extractedText && (
-                          <> • {uploadedFile.extractedText.length} characters extracted</>
-                        )}
-                        {uploadedFile.editedText && (
-                          <> • Text edited</>
-                        )}
-                      </div>
-                      
-                      {uploadedFile.status === 'extracting' && uploadedFile.progress !== undefined && (
-                        <Progress value={uploadedFile.progress} className="mt-2" />
-                      )}
-                    </div>
-                    
-                    <div className="flex gap-2">
-                      <Badge variant={
-                        uploadedFile.status === 'done' ? 'default' : 
-                        uploadedFile.status === 'error' ? 'destructive' : 
-                        uploadedFile.status === 'extracting' ? 'secondary' :
-                        'secondary'
-                      }>
-                        {uploadedFile.status === 'extracting' ? 'Extracting...' : uploadedFile.status}
-                      </Badge>
-                      
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        onClick={() => handleEditFile(index)}
-                        disabled={uploadedFile.status === 'extracting'}
-                      >
-                        Edit Text
-                      </Button>
-                      
-                      <Button 
-                        size="sm" 
-                        variant="destructive"
-                        onClick={() => handleRemoveFile(index)}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            ))}
           </div>
         </div>
-      )}
+      </div>
 
       {/* Input Area */}
       <div className="border-t border-border bg-card/50 backdrop-blur-sm p-4">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <div className="flex gap-3">
-            <div className="flex-shrink-0">
-              <UploadPicker
-                mode="document"
-                multiple={true}
-                onFilesSelected={handleFilesSelected}
-                disabled={isLoading}
-              />
-            </div>
             <div className="flex-1 flex gap-2">
               <Input
                 value={inputValue}
@@ -627,18 +594,18 @@ const handleSendMessage = async () => {
             about Malaysian legal matters
           </p>
         </div>
-      </div>
 
-      {/* Edit Document Modal */}
-      {editingFile && (
-        <EditDocumentModal
-          file={editingFile.file}
-          initialText={editingFile.text}
-          isOpen={!!editingFile}
-          onSave={handleSaveEditedText}
-          onClose={() => setEditingFile(null)}
-        />
-      )}
+        {editingFile && (
+          <EditDocumentModal
+            file={editingFile.file}
+            initialText={editingFile.text}
+            isOpen={!!editingFile}
+            onSave={handleSaveEditedText}
+            onClose={() => setEditingFile(null)}
+          />
+        )}
+      </div>
     </div>
-  );
+  </>
+);
 }

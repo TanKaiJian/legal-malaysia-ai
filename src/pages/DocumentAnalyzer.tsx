@@ -27,6 +27,10 @@ import { UploadPicker } from "@/components/UploadPicker";
 import { FileChip } from "@/components/FileChip";
 import { EditDocumentModal } from "@/components/EditDocumentModal";
 import { extractText, UnifiedExtractionResult } from "@/services/textExtractor";
+import DisclaimerModal from "@/components/ui/disclaimer";
+import { useEffect } from "react";
+import { saveUploadedFiles, useUploadedFiles } from "@/hooks/uploadedFileContext";
+import { useNavigate } from "react-router-dom";
 
 interface FileAnalysisResult {
   clauses: Array<{
@@ -52,6 +56,7 @@ interface SelectedFile {
 }
 
 export default function DocumentAnalyzer() {
+  const [showDisclaimer, setShowDisclaimer] = useState(true);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResults, setAnalysisResults] = useState<
@@ -63,8 +68,23 @@ export default function DocumentAnalyzer() {
     text: string;
   } | null>(null);
   const { toast } = useToast();
+  const { saveUploadedFiles, setUploadedFiles } = useUploadedFiles();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const accepted = localStorage.getItem("disclaimerAccepted");
+    if (accepted) setShowDisclaimer(false);
+  }, []);
+  
+  const handleAccept = () => {
+    localStorage.setItem("disclaimerAccepted", "true");
+    setShowDisclaimer(false);
+  };
 
   const handleFilesSelected = async (files: File[]) => {
+     const newFiles: saveUploadedFiles[] = files.map(file => ({
+    file
+     }));
     const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
     const validFiles: File[] = [];
 
@@ -103,6 +123,8 @@ export default function DocumentAnalyzer() {
     if (!activeTab && validFiles.length > 0) {
       setActiveTab(validFiles[0].name);
     }
+
+    setUploadedFiles((prev) => [...prev, ...newFiles]);
 
     // Start extracting text from uploaded files
     await extractTextFromFiles(newSelectedFiles.length - validFiles.length, validFiles);
@@ -337,6 +359,8 @@ export default function DocumentAnalyzer() {
   };
 
   return (
+    <>
+      <DisclaimerModal isOpen={showDisclaimer} onAccept={handleAccept} />
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
@@ -347,6 +371,9 @@ export default function DocumentAnalyzer() {
             Upload multiple legal documents to extract key clauses and assess
             potential risks
           </p>
+          <p className="mb-4 text-red-500">
+        Chatting is based on uploaded file(s). Please upload first.
+      </p>
         </div>
 
         <Card className="mb-8">
@@ -474,6 +501,19 @@ export default function DocumentAnalyzer() {
         </Card>
       </div>
 
+    <div className="flex flex-col items-center justify-center p-6">
+      {/* Show button only if at least one file is uploaded */}
+      {saveUploadedFiles.length > 0 && (
+        <button
+          className="mt-6 px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark"
+          onClick={() => navigate("/chatbot")}
+        >
+          Go to Chatbot
+        </button>
+      )}
+    </div>
+
+
       {editingFile && (
         <EditDocumentModal
           file={editingFile.file}
@@ -484,5 +524,6 @@ export default function DocumentAnalyzer() {
         />
       )}
     </div>
+    </>
   );
 }
