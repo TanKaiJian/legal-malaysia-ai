@@ -114,8 +114,22 @@ const handleSendMessage = async () => {
   setIsLoading(true);
 
   try {
-    // 1️⃣ Query Kendra to get context snippets
-    const snippets = await queryKendra(inputValue);
+    // Combine user question with any extracted/edited text from uploaded files
+    const documentContext = uploadedFiles
+      .map(file => {
+        // Prefer edited text over extracted text
+        const fileContent = file.editedText || file.extractedText || '';
+        return `Document "${file.file.name}": ${fileContent}`;
+      })
+      .join('\n\n');
+
+    // Create combined context with user question and document contents
+    const fullContext = documentContext 
+      ? `${inputValue}\n\nContext from uploaded documents:\n${documentContext}`
+      : inputValue;
+
+    // 1️⃣ Query Kendra with combined context
+    const snippets = await queryKendra(fullContext);
 
     // 2️⃣ Query Bedrock using the question + Kendra snippets
     const bedrockAnswer = await queryBedrock(inputValue, snippets);
