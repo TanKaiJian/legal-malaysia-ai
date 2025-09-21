@@ -567,8 +567,8 @@ const handleSendMessage = async () => {
     <DisclaimerModal isOpen={showDisclaimer} onAccept={handleAccept} />
 
     <div className="h-full flex flex-col bg-background">
-      {/* Header */}
-      <div className="border-b border-border/50 bg-gradient-to-r from-card/80 to-card/60 backdrop-blur-md p-6">
+      {/* Header - Sticky */}
+      <div className="sticky top-0 z-50 border-b border-border/50 bg-gradient-to-r from-card/80 to-card/60 backdrop-blur-md p-6">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
@@ -589,7 +589,7 @@ const handleSendMessage = async () => {
       {/* Main Area (Chat + Sidebar) */}
       <div className="flex flex-1 max-w-6xl mx-auto w-full relative">
         {/* Chat Area */}
-        <div className={`flex-1 flex flex-col overflow-y-auto p-6 space-y-8 transition-all duration-300 scroll-smooth ${
+        <div className={`flex-1 flex flex-col overflow-y-auto p-6 space-y-8 transition-all duration-300 scroll-smooth min-h-[calc(100vh-280px)] ${
           !isFilesCollapsed ? 'pr-80' : 'pr-6'
         }`}>
           {messages.map((message, index) => (
@@ -716,9 +716,9 @@ const handleSendMessage = async () => {
         </div>
 
         {/* Sidebar (Uploaded Files & Analysis) */}
-        <div className={`absolute top-0 right-0 transition-all duration-300 ease-in-out ${
+        <div className={`sticky top-[150px] right-0 transition-all duration-300 ease-in-out ${
           isFilesCollapsed ? 'translate-x-full' : 'translate-x-0'
-        } w-80 h-full flex flex-col bg-card border border-border rounded-lg overflow-hidden`}>
+        } w-80 h-[calc(100vh-240px)] flex flex-col bg-card border border-border rounded-lg overflow-hidden self-start`}>
           
           {/* Collapse/Expand Button */}
           <div className="absolute -left-6 top-1/2 transform -translate-y-1/2">
@@ -820,8 +820,8 @@ const handleSendMessage = async () => {
         </div>
       </div>
 
-      {/* Input Area */}
-      <div className="border-t border-border/50 bg-gradient-to-r from-card/80 to-card/60 backdrop-blur-md p-6">
+      {/* Input Area - Sticky */}
+      <div className="sticky bottom-0 z-40 border-t border-border/50 bg-gradient-to-r from-card/80 to-card/60 backdrop-blur-md p-6">
         <div className="max-w-6xl mx-auto">
           <div className="flex gap-4">
             <div className="flex-1 relative">
