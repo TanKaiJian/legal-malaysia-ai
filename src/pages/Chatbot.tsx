@@ -82,7 +82,7 @@ export default function Chatbot() {
   async function queryBedrock(userQuestion: string, snippets: string[]) {
     try {
       const res = await fetch(
-        "https://f9jekjb575.execute-api.ap-southeast-1.amazonaws.com/devmhtwo/toBedrock",
+        "https://f9jekjb575.execute-api.ap-southeast-1.amazonaws.com/devmhtwo/bedrockapi",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

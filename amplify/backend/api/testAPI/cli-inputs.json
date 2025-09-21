@@ -21,6 +21,13 @@
       "permissions": {
         "setting": "open"
       }
+    },
+    "/bedrockapi": {
+      "name": "/bedrockapi",
+      "lambdaFunction": "bedrockV2",
+      "permissions": {
+        "setting": "open"
+      }
     }
   }
 }

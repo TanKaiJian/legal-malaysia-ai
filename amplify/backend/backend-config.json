@@ -25,6 +25,14 @@
           ],
           "category": "function",
           "resourceName": "sendKendraSnippetsToBedrock"
+        },
+        {
+          "attributes": [
+            "Name",
+            "Arn"
+          ],
+          "category": "function",
+          "resourceName": "bedrockV2"
         }
       ],
       "providerPlugin": "awscloudformation",
