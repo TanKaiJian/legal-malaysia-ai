@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { client, safeApiCall } from "@/lib/amplify-client";
-import { Send, User, Bot, Loader2, CheckCircle, AlertCircle, FileText } from "lucide-react";
+import { Send, User, Bot, Loader2, CheckCircle, AlertCircle, FileText, ChevronLeft, ChevronRight, BarChart3, RefreshCw, Copy, ThumbsUp, ThumbsDown, RotateCcw } from "lucide-react";
 import {
   readFilesAsBase64,
   isAllowedDocumentOrImage,
@@ -19,6 +19,7 @@ import { extractText, UnifiedExtractionResult } from "@/services/textExtractor";
 import DisclaimerModal from "@/components/ui/disclaimer";
 import { useUploadedFiles } from "@/hooks/uploadedFileContext";
 import { useNavigate } from "react-router-dom";
+import AnalysisSummaryPanel from "@/components/AnalysisSummaryPanel";
 
 interface Message {
   id: string;
@@ -37,9 +38,30 @@ interface UploadedFile {
 }
 
 export default function Chatbot() {
-  const { saveUploadedFiles } = useUploadedFiles();
+  const { saveUploadedFiles, analysisResult, setUploadedFiles: setGlobalUploadedFiles, setAnalysisResult } = useUploadedFiles();
   const navigate = useNavigate();
   const [showDisclaimer, setShowDisclaimer] = useState(true);
+  const [isFilesCollapsed, setIsFilesCollapsed] = useState(false);
+  const [showSummaryPanel, setShowSummaryPanel] = useState(false);
+  const [showNewSessionConfirm, setShowNewSessionConfirm] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: "1",
+      type: "assistant",
+      content:
+        "👋 Hello! I'm your AI Legal Assistant for Malaysian law.\n\n✨ I can help you with:\n• 📄 Analyzing legal documents and contracts\n• ⚖️ Explaining Malaysian legal procedures\n• 🔍 Identifying important clauses and potential risks\n• 💡 Providing legal guidance and recommendations\n\nFeel free to upload documents or ask me any legal questions!",
+      timestamp: new Date(),
+    },
+  ]);
+  const [inputValue, setInputValue] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [editingFile, setEditingFile] = useState<{
+    file: File;
+    text: string;
+  } | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
   
   useEffect(() => {
     if (!saveUploadedFiles.length) {
@@ -53,39 +75,101 @@ export default function Chatbot() {
     if (accepted) setShowDisclaimer(false);
   }, []);
 
+  // Keyboard shortcut listener for Ctrl+S to open analysis summary
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.key === 's' && analysisResult) {
+        event.preventDefault();
+        setShowSummaryPanel(true);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [analysisResult]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Cleanup effect - clear analysis data when leaving the chat
+  useEffect(() => {
+    return () => {
+      // Clear analysis result and uploaded files when component unmounts
+      setAnalysisResult(null);
+      setGlobalUploadedFiles([]);
+      
+      // Show a toast message for user feedback (Note: toast might not show if component is unmounting)
+      console.log("Chatbot session cleared - analysis data and uploaded files removed");
+    };
+  }, [setAnalysisResult, setGlobalUploadedFiles]);
+
   const handleAccept = () => {
     localStorage.setItem("disclaimerAccepted", "true");
     setShowDisclaimer(false);
   };
 
-  if (!saveUploadedFiles.length) return null;
-  
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      type: "assistant",
-      content:
-        "Hello! I'm your AI Legal Assistant. I can help you understand legal documents, answer questions about contracts, and provide guidance on Malaysian law. How can I assist you today?",
-      timestamp: new Date(),
-    },
-  ]);
-  const [inputValue, setInputValue] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [editingFile, setEditingFile] = useState<{
-    file: File;
-    text: string;
-  } | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { toast } = useToast();
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const handleStartNewSession = () => {
+    setShowNewSessionConfirm(true);
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  const confirmNewSession = () => {
+    // Clear all data
+    setAnalysisResult(null);
+    setGlobalUploadedFiles([]);
+    setMessages([
+      {
+        id: "1",
+        type: "assistant",
+        content: "Hello! I'm your AI Legal Assistant. I can help you understand legal documents, answer questions about contracts, and provide guidance on Malaysian law. How can I assist you today?",
+        timestamp: new Date(),
+      },
+    ]);
+    
+    setShowNewSessionConfirm(false);
+    
+    // Show confirmation toast
+    toast({
+      title: "New Session Started",
+      description: "Previous analysis cleared. Redirecting to document analyzer...",
+    });
+    
+    // Navigate to document analyzer after a short delay
+    setTimeout(() => {
+      navigate("/analyzer");
+    }, 1000);
+  };
+
+  // Helper function to truncate filename while preserving extension
+  // Examples: 
+  // "very-long-document-name.pdf" → "very-long-document-n....pdf"
+  // "contract.docx" → "contract.docx" (no truncation needed)
+  // "extremely-long-legal-document-with-many-details.pdf" → "extremely-long-legal-do....pdf"
+  const getTruncatedFileName = (fileName: string, maxLength: number = 30) => {
+    if (fileName.length <= maxLength) return fileName;
+    
+    const lastDotIndex = fileName.lastIndexOf('.');
+    if (lastDotIndex === -1) {
+      // No extension, just truncate normally
+      return fileName.substring(0, maxLength - 3) + '...';
+    }
+    
+    const name = fileName.substring(0, lastDotIndex);
+    const extension = fileName.substring(lastDotIndex);
+    
+    // Reserve space for extension and ellipsis
+    const availableLength = maxLength - extension.length - 3;
+    
+    if (availableLength <= 3) {
+      // If extension is very long or name would be too short, show more of the name
+      const minNameLength = Math.max(3, maxLength - extension.length - 3);
+      return name.substring(0, minNameLength) + '...' + extension;
+    }
+    
+    return name.substring(0, availableLength) + '...' + extension;
+  };
+
+  if (!saveUploadedFiles.length) return null;
 
   async function queryKendra(userQuestion: string) {
     try {
@@ -185,7 +269,6 @@ const handleSendMessage = async () => {
   }
 };
 
-
   const handleFilesSelected = async (files: File[]) => {
     const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
     const validFiles: File[] = [];
@@ -252,7 +335,7 @@ const handleSendMessage = async () => {
         setUploadedFiles(prev => prev.map((f, idx) =>
           idx === fileIndex ? { 
             ...f, 
-            status: 'idle', 
+            status: 'done', 
             extractedText: result.text,
             extractionResult: result,
             progress: 100 
@@ -472,28 +555,37 @@ const handleSendMessage = async () => {
 
     <div className="h-full flex flex-col bg-background">
       {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur-sm p-4">
+      <div className="border-b border-border/50 bg-gradient-to-r from-card/80 to-card/60 backdrop-blur-md p-6">
         <div className="max-w-6xl mx-auto">
-          <h1 className="text-2xl font-bold text-foreground mb-2">
-            AI Legal Chatbot
-          </h1>
-          <p className="text-muted-foreground">
-            Ask questions about legal documents and get instant AI-powered
-            answers
-          </p>
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
+              <Bot className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent mb-1">
+                AI Legal Assistant
+              </h1>
+              <p className="text-muted-foreground font-medium">
+                🇲🇾 Malaysian Law Expert • Powered by Advanced AI
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Main Area (Chat + Sidebar) */}
-      <div className="flex flex-1 max-w-6xl mx-auto w-full">
+      <div className="flex flex-1 max-w-6xl mx-auto w-full relative">
         {/* Chat Area */}
-        <div className="flex-1 flex flex-col overflow-y-auto p-4 space-y-6">
-          {messages.map((message) => (
+        <div className={`flex-1 flex flex-col overflow-y-auto p-6 space-y-8 transition-all duration-300 scroll-smooth ${
+          !isFilesCollapsed ? 'pr-80' : 'pr-6'
+        }`}>
+          {messages.map((message, index) => (
             <div
               key={message.id}
               className={`flex gap-4 ${
-                message.type === "user" ? "justify-end" : "justify-start"
+                message.type === "user" ? "justify-end animate-slide-in-right" : "justify-start animate-slide-in-left"
               }`}
+              style={{ animationDelay: `${index * 100}ms` }}
             >
               <div
                 className={`flex gap-3 max-w-3xl ${
@@ -501,36 +593,77 @@ const handleSendMessage = async () => {
                 }`}
               >
                 <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                  className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200 shadow-lg ${
                     message.type === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-accent text-accent-foreground"
+                      ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-primary/25 ring-2 ring-primary/20"
+                      : "bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-blue-500/25 ring-2 ring-blue-500/20"
                   }`}
                 >
                   {message.type === "user" ? (
-                    <User className="w-4 h-4" />
+                    <User className="w-5 h-5" />
                   ) : (
-                    <Bot className="w-4 h-4" />
+                    <Bot className="w-5 h-5" />
                   )}
                 </div>
                 <div
-                  className={`p-4 rounded-2xl ${
+                  className={`p-5 rounded-2xl transition-all duration-200 hover:shadow-lg group relative ${
                     message.type === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-card border border-border shadow-card"
+                      ? "bg-gradient-to-br from-primary to-primary/90 text-primary-foreground shadow-lg shadow-primary/25"
+                      : "bg-gradient-to-br from-card to-card/80 border border-border/50 shadow-lg hover:shadow-xl backdrop-blur-sm"
                   }`}
                 >
-                  <div className="whitespace-pre-wrap break-words">
+                  <div className="whitespace-pre-wrap break-words leading-relaxed">
                     {message.content}
                   </div>
+                  
+                  {/* Message Actions */}
+                  {message.type === "assistant" && (
+                    <div className="absolute -bottom-2 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                      <div className="flex gap-1 bg-background/90 backdrop-blur-sm border border-border/50 rounded-lg p-1 shadow-lg">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0 hover:bg-green-500/10 hover:text-green-600"
+                          onClick={() => {
+                            navigator.clipboard.writeText(message.content);
+                            toast({ title: "Message copied to clipboard" });
+                          }}
+                        >
+                          <Copy className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0 hover:bg-blue-500/10 hover:text-blue-600"
+                        >
+                          <ThumbsUp className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0 hover:bg-red-500/10 hover:text-red-600"
+                        >
+                          <ThumbsDown className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0 hover:bg-orange-500/10 hover:text-orange-600"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
                   <div
-                    className={`text-xs mt-2 opacity-70 ${
+                    className={`text-xs mt-3 opacity-60 group-hover:opacity-80 transition-opacity font-medium ${
                       message.type === "user"
-                        ? "text-primary-foreground"
+                        ? "text-primary-foreground/80"
                         : "text-muted-foreground"
                     }`}
                   >
-                    {message.timestamp.toLocaleTimeString()}
+                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </div>
                 </div>
               </div>
@@ -538,15 +671,19 @@ const handleSendMessage = async () => {
           ))}
 
           {isLoading && (
-            <div className="flex gap-4 justify-start">
+            <div className="flex gap-4 justify-start animate-fade-in">
               <div className="flex gap-3 max-w-3xl">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-accent text-accent-foreground">
-                  <Bot className="w-4 h-4" />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200 shadow-lg bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-blue-500/25 ring-2 ring-blue-500/20">
+                  <Bot className="w-5 h-5" />
                 </div>
-                <div className="p-4 rounded-2xl bg-card border border-border shadow-card">
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Thinking...</span>
+                <div className="p-5 rounded-2xl bg-gradient-to-br from-card to-card/80 border border-border/50 shadow-lg backdrop-blur-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    </div>
+                    <span className="text-muted-foreground font-medium">AI is thinking...</span>
                   </div>
                 </div>
               </div>
@@ -556,57 +693,158 @@ const handleSendMessage = async () => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Sidebar (Uploaded Files) */}
-        <div className="absolute top-18 right-0 h-[calc(90vh-10rem)] w-80 flex flex-col bg-card border border-border rounded-lg overflow-hidden">
-          <div className="p-3 border-b border-border">
-            <h3 className="text-sm font-medium">Uploaded Files</h3>
-            <span className="text-xs text-muted-foreground">
-              {saveUploadedFiles.length} file{saveUploadedFiles.length !== 1 ? "s" : ""}
-            </span>
+        {/* Sidebar (Uploaded Files & Analysis) */}
+        <div className={`absolute top-0 right-0 transition-all duration-300 ease-in-out ${
+          isFilesCollapsed ? 'translate-x-full' : 'translate-x-0'
+        } w-80 h-full flex flex-col bg-card border border-border rounded-lg overflow-hidden`}>
+          
+          {/* Collapse/Expand Button */}
+          <div className="absolute -left-6 top-1/2 transform -translate-y-1/2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsFilesCollapsed(!isFilesCollapsed)}
+              className="h-12 w-6 rounded-l-lg rounded-r-none bg-card border border-r-0 border-border hover:bg-muted"
+            >
+              {isFilesCollapsed ? (
+                <ChevronLeft className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </Button>
           </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-2">
-            {saveUploadedFiles.map((uf, index) => (
-              <div
-                key={uf.file.name}
-                className="flex items-center justify-between gap-2 p-3 border rounded-lg bg-background"
-              >
-                <span className="text-sm truncate">{uf.file.name}</span>
+
+          {!isFilesCollapsed && (
+            <>
+              {/* Analysis Summary Section */}
+              {analysisResult && (
+                <div className="p-3 border-b border-border bg-gradient-to-r from-primary/10 to-primary/5">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4 text-primary" />
+                      <h3 className="text-sm font-medium">Analysis Summary</h3>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Combined analysis of {analysisResult.analyzed_files?.length || 0} documents
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-blue-600">
+                        {analysisResult.important_clauses.length}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Clauses</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-red-600">
+                        {analysisResult.legal_risks.length}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Risks</div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Button 
+                      size="sm" 
+                      onClick={() => setShowSummaryPanel(true)}
+                      className="w-full text-xs"
+                    >
+                      <BarChart3 className="w-3 h-3 mr-1" />
+                      View Full Summary
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={handleStartNewSession}
+                      className="w-full text-xs border-orange-200 text-orange-700 hover:bg-orange-50"
+                    >
+                      <RefreshCw className="w-3 h-3 mr-1" />
+                      Start New Session
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2 text-center">
+                    Press <kbd className="px-1 py-0.5 text-xs bg-muted rounded">Ctrl+S</kbd> for quick access
+                  </p>
+                </div>
+              )}
+
+              {/* Uploaded Files Section */}
+              <div className="p-3 border-b border-border">
+                <h3 className="text-sm font-medium flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Uploaded Files
+                </h3>
+                <span className="text-xs text-muted-foreground">
+                  {saveUploadedFiles.length} file{saveUploadedFiles.length !== 1 ? "s" : ""}
+                </span>
               </div>
-            ))}
-          </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                {saveUploadedFiles.map((uf, index) => (
+                  <div
+                    key={uf.file.name}
+                    className="flex items-center gap-2 p-3 border rounded-lg bg-background hover:bg-muted/50 transition-colors"
+                  >
+                    <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <span 
+                      className="text-sm flex-1 min-w-0"
+                      title={uf.file.name}
+                    >
+                      {getTruncatedFileName(uf.file.name)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
       {/* Input Area */}
-      <div className="border-t border-border bg-card/50 backdrop-blur-sm p-4">
+      <div className="border-t border-border/50 bg-gradient-to-r from-card/80 to-card/60 backdrop-blur-md p-6">
         <div className="max-w-6xl mx-auto">
-          <div className="flex gap-3">
-            <div className="flex-1 flex gap-2">
-              <Input
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Ask me about legal documents, contracts, or Malaysian law..."
-                disabled={isLoading}
-                className="flex-1"
-              />
-              <Button
-                onClick={handleSendMessage}
-                disabled={!inputValue.trim() || isLoading}
-                size="icon"
-              >
-                {isLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Send className="w-4 h-4" />
+          <div className="flex gap-4">
+            <div className="flex-1 relative">
+              <div className="relative">
+                <Input
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="💬 Ask me about legal documents, contracts, or Malaysian law..."
+                  disabled={isLoading}
+                  className="flex-1 h-12 pl-4 pr-4 rounded-xl border-2 border-border/50 focus:border-primary/50 bg-background/80 backdrop-blur-sm shadow-lg transition-all duration-200 focus:shadow-xl text-base placeholder:text-muted-foreground/70"
+                />
+                {inputValue && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <Badge variant="secondary" className="text-xs">
+                      {inputValue.length}
+                    </Badge>
+                  </div>
                 )}
-              </Button>
+              </div>
+            </div>
+            <Button
+              onClick={handleSendMessage}
+              disabled={!inputValue.trim() || isLoading}
+              className="h-12 px-6 rounded-xl bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
+            >
+              {isLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <>
+                  <Send className="w-5 h-5 mr-2" />
+                  Send
+                </>
+              )}
+            </Button>
+          </div>
+          <div className="flex items-center justify-between mt-3">
+            <p className="text-xs text-muted-foreground">
+              🔒 Secure • 📄 Multi-format support • 🇲🇾 Malaysian law expertise
+            </p>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              AI Online
             </div>
           </div>
-          <p className="text-xs text-muted-foreground mt-2 text-center">
-            Upload multiple documents (PDF, DOCX, TXT, images) or ask questions
-            about Malaysian legal matters
-          </p>
         </div>
 
         {editingFile && (
@@ -620,6 +858,52 @@ const handleSendMessage = async () => {
         )}
       </div>
     </div>
+
+    {/* Analysis Summary Panel */}
+    <AnalysisSummaryPanel
+      analysisResult={analysisResult}
+      isOpen={showSummaryPanel}
+      onClose={() => setShowSummaryPanel(false)}
+    />
+
+    {/* New Session Confirmation Dialog */}
+    {showNewSessionConfirm && (
+      <div 
+        className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm"
+        onClick={() => setShowNewSessionConfirm(false)}
+      >
+        <div 
+          className="bg-white dark:bg-card rounded-lg shadow-2xl max-w-md w-full p-6 animate-in fade-in-0 zoom-in-95 duration-200"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <RefreshCw className="w-6 h-6 text-orange-600" />
+            <h2 className="text-lg font-semibold text-foreground">Start New Session?</h2>
+          </div>
+          
+          <p className="text-muted-foreground mb-6">
+            This will clear all current analysis data, chat history, and uploaded files. 
+            You'll be redirected to the Document Analyzer to start fresh.
+          </p>
+          
+          <div className="flex gap-3 justify-end">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowNewSessionConfirm(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={confirmNewSession}
+              className="bg-orange-600 hover:bg-orange-700 text-white"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Start New Session
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
   </>
 );
 }

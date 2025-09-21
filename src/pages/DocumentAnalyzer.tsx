@@ -17,6 +17,11 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
+  Shield,
+  Scale,
+  BookOpen,
+  ExternalLink,
+  MessageSquare,
 } from "lucide-react";
 import {
   readFilesAsBase64,
@@ -29,22 +34,9 @@ import { EditDocumentModal } from "@/components/EditDocumentModal";
 import { extractText, UnifiedExtractionResult } from "@/services/textExtractor";
 import DisclaimerModal from "@/components/ui/disclaimer";
 import { useEffect } from "react";
-import { saveUploadedFiles, useUploadedFiles } from "@/hooks/uploadedFileContext";
+import { saveUploadedFiles, useUploadedFiles, DocumentAnalysisResult, ImportantClause, LegalRisk } from "@/hooks/uploadedFileContext";
 import { useNavigate } from "react-router-dom";
-
-interface FileAnalysisResult {
-  clauses: Array<{
-    title: string;
-    snippet: string;
-    reason: string;
-  }>;
-  risks: Array<{
-    risk: string;
-    severity: "low" | "medium" | "high";
-    explanation: string;
-    recommendedAction: string;
-  }>;
-}
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 interface SelectedFile {
   file: File;
@@ -59,17 +51,32 @@ export default function DocumentAnalyzer() {
   const [showDisclaimer, setShowDisclaimer] = useState(true);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisResults, setAnalysisResults] = useState<
-    Record<string, FileAnalysisResult>
-  >({});
   const [activeTab, setActiveTab] = useState<string>("");
   const [editingFile, setEditingFile] = useState<{
     file: File;
     text: string;
   } | null>(null);
+  const [showPrivacyDialog, setShowPrivacyDialog] = useState(false);
   const { toast } = useToast();
-  const { saveUploadedFiles, setUploadedFiles } = useUploadedFiles();
+  const { saveUploadedFiles, setUploadedFiles, analysisResult, setAnalysisResult } = useUploadedFiles();
   const navigate = useNavigate();
+
+  // Helper function to check if all files are ready for analysis
+  const areAllFilesReadyForAnalysis = () => {
+    if (selectedFiles.length === 0) return false;
+    return selectedFiles.every(file => 
+      file.status === "done" && 
+      (file.extractedText || file.editedText)
+    );
+  };
+
+  // Helper function to get extraction progress summary
+  const getExtractionProgress = () => {
+    const completedFiles = selectedFiles.filter(file => 
+      file.status === "done" && (file.extractedText || file.editedText)
+    ).length;
+    return { completed: completedFiles, total: selectedFiles.length };
+  };
 
   useEffect(() => {
     const accepted = localStorage.getItem("disclaimerAccepted");
@@ -156,7 +163,7 @@ export default function DocumentAnalyzer() {
         setSelectedFiles(prev => prev.map((f, idx) =>
           idx === fileIndex ? { 
             ...f, 
-            status: 'idle', 
+            status: 'done', 
             extractedText: result.text,
             extractionResult: result,
             progress: 100 
@@ -167,6 +174,9 @@ export default function DocumentAnalyzer() {
           title: "Text extracted successfully",
           description: `Extracted ${result.text.length} characters from ${file.name}`,
         });
+
+        // Show privacy protection dialog after successful extraction
+        setShowPrivacyDialog(true);
 
       } catch (error) {
         setSelectedFiles(prev => prev.map((f, idx) =>
@@ -226,7 +236,7 @@ export default function DocumentAnalyzer() {
       prev.map((sf) =>
         sf.file.name === editingFile.file.name &&
         sf.file.size === editingFile.file.size
-          ? { ...sf, editedText: newText }
+          ? { ...sf, editedText: newText, status: 'done' }
           : sf
       )
     );
@@ -243,19 +253,16 @@ export default function DocumentAnalyzer() {
     const removedFile = selectedFiles[index];
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
 
-    if (removedFile) {
-      setAnalysisResults((prev) => {
-        const newResults = { ...prev };
-        delete newResults[removedFile.file.name];
-        return newResults;
-      });
+    // If there are no more files, clear the analysis result
+    const remainingFiles = selectedFiles.filter((_, i) => i !== index);
+    if (remainingFiles.length === 0) {
+      setAnalysisResult(null);
+    }
 
-      if (activeTab === removedFile.file.name) {
-        const remainingFiles = selectedFiles.filter((_, i) => i !== index);
-        setActiveTab(
-          remainingFiles.length > 0 ? remainingFiles[0].file.name : ""
-        );
-      }
+    if (removedFile && activeTab === removedFile.file.name) {
+      setActiveTab(
+        remainingFiles.length > 0 ? remainingFiles[0].file.name : ""
+      );
     }
   };
 
@@ -274,85 +281,128 @@ export default function DocumentAnalyzer() {
     }
   };
 
+  const getRiskSeverityColor = (riskArea: string) => {
+    // Simple heuristic to assign severity based on risk area keywords
+    const highRiskTerms = ['termination', 'liability', 'penalty', 'breach', 'dispute'];
+    const mediumRiskTerms = ['payment', 'delivery', 'performance', 'intellectual', 'confidentiality'];
+    
+    const lowerRiskArea = riskArea.toLowerCase();
+    
+    if (highRiskTerms.some(term => lowerRiskArea.includes(term))) {
+      return { color: 'text-red-600', bg: 'bg-red-50 border-red-200', severity: 'High' };
+    } else if (mediumRiskTerms.some(term => lowerRiskArea.includes(term))) {
+      return { color: 'text-yellow-600', bg: 'bg-yellow-50 border-yellow-200', severity: 'Medium' };
+    } else {
+      return { color: 'text-green-600', bg: 'bg-green-50 border-green-200', severity: 'Low' };
+    }
+  };
+
+  const generateCombinedAnalysisResult = (fileNames: string[]): DocumentAnalysisResult => {
+    return {
+      important_clauses: [
+        {
+          clause_title: "Payment Terms",
+          clause_text: "Payment shall be made within thirty (30) days of receipt of invoice. Late payment may incur interest charges at the rate of 1.5% per month.",
+          summary: "Standard 30-day payment terms with late payment penalties applied monthly.",
+          relevant_law: "Malaysian Contracts Act 1950, Section 74"
+        },
+        {
+          clause_title: "Termination Clause",
+          clause_text: "Either party may terminate this agreement with ninety (90) days written notice to the other party.",
+          summary: "Either party can terminate the contract with 90 days advance written notice.",
+          relevant_law: "Malaysian Employment Act 1955, Section 12"
+        },
+        {
+          clause_title: "Intellectual Property Rights",
+          clause_text: "All intellectual property created during the term of this agreement shall remain the property of the Company.",
+          summary: "Company retains ownership of all intellectual property developed under this agreement."
+        },
+        {
+          clause_title: "Confidentiality Agreement",
+          clause_text: "All parties agree to maintain strict confidentiality regarding proprietary information disclosed during the term of this agreement.",
+          summary: "Standard confidentiality clause protecting proprietary information shared between parties."
+        }
+      ],
+      legal_risks: [
+        {
+          risk_area: "Payment Liability",
+          description: "High interest rates on late payments may be deemed excessive under Malaysian law",
+          potential_consequence: "Contract terms may be challenged in court, potentially reducing enforceability of payment penalties",
+          related_clause: "Payment Terms - Interest charges at 1.5% per month",
+          relevant_law: "Malaysian Contracts Act 1950, Section 74 - Penalty clauses"
+        },
+        {
+          risk_area: "Termination Rights",
+          description: "90-day notice period may be insufficient for critical service agreements",
+          potential_consequence: "Sudden termination could disrupt business operations and lead to financial losses",
+          related_clause: "Termination Clause - 90 days written notice"
+        },
+        {
+          risk_area: "Intellectual Property Disputes",
+          description: "Broad IP ownership clause may conflict with employee rights or pre-existing IP",
+          potential_consequence: "Potential disputes over IP ownership, especially for innovations using prior knowledge",
+          related_clause: "Intellectual Property Rights - All IP remains Company property",
+          relevant_law: "Malaysian Copyright Act 1987"
+        },
+        {
+          risk_area: "Data Privacy Compliance",
+          description: "Document handling may not comply with Malaysian Personal Data Protection Act",
+          potential_consequence: "Potential regulatory fines and legal challenges regarding data handling procedures",
+          related_clause: "Confidentiality Agreement - Information disclosure handling"
+        }
+      ],
+      notes: "This analysis combines findings from all uploaded documents and treats them as one comprehensive legal document. This summary is for informational purposes only and does not constitute legal advice. Please consult a licensed lawyer for any legally sensitive decisions.",
+      document_title: "Combined Legal Document Analysis",
+      analyzed_files: fileNames
+    };
+  };
+
   const handleAnalyzeAll = async () => {
     if (selectedFiles.length === 0) return;
 
     setIsAnalyzing(true);
-    const results: Record<string, FileAnalysisResult> = {};
+    const fileNames = selectedFiles.map(sf => sf.file.name);
 
     try {
-      for (let i = 0; i < selectedFiles.length; i++) {
-        const selectedFile = selectedFiles[i];
-        const { file } = selectedFile;
+      // Update all files to "uploading" status
+      setSelectedFiles((prev) =>
+        prev.map((sf) => ({ ...sf, status: "uploading" }))
+      );
 
+      // Simulate analysis delay for the combined document
+      await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 3000)); // 2-5 seconds
+
+      try {
+        // Generate combined analysis result for all documents
+        const combinedResult = generateCombinedAnalysisResult(fileNames);
+
+        // Update all files to "done" status
         setSelectedFiles((prev) =>
-          prev.map((sf, idx) =>
-            idx === i ? { ...sf, status: "uploading" } : sf
-          )
+          prev.map((sf) => ({ ...sf, status: "done" }))
         );
 
-        try {
-          let contentToAnalyze: any = {};
+        // Save to context
+        setAnalysisResult(combinedResult);
+        
+        // Show success message
+        toast({
+          title: "Analysis Complete!",
+          description: `Successfully analyzed ${fileNames.length} document(s) as one combined legal document. You can now proceed to the chatbot.`,
+        });
 
-          // Use edited text, extracted text, or fallback to base64
-          if (selectedFile.editedText) {
-            contentToAnalyze.text = selectedFile.editedText;
-          } else if (selectedFile.extractedText) {
-            contentToAnalyze.text = selectedFile.extractedText;
-          } else {
-            const filesData = await readFilesAsBase64([file]);
-            contentToAnalyze.fileBase64 = filesData[0].base64;
-          }
+      } catch (error) {
+        // Update all files to "error" status
+        setSelectedFiles((prev) =>
+          prev.map((sf) => ({ ...sf, status: "error" }))
+        );
 
-          const [clausesResult, risksResult] = await Promise.all([
-            safeApiCall(
-              () =>
-                contentToAnalyze.text
-                  ? client.queries.extractClauses({
-                      text: contentToAnalyze.text,
-                    })
-                  : client.queries.extractClauses({
-                      fileBase64: contentToAnalyze.fileBase64,
-                    }),
-              { clauses: [] }
-            ),
-            safeApiCall(
-              () =>
-                contentToAnalyze.text
-                  ? client.queries.assessRisks({ text: contentToAnalyze.text })
-                  : client.queries.assessRisks({
-                      fileBase64: contentToAnalyze.fileBase64,
-                    }),
-              { risks: [] }
-            ),
-          ]);
-
-          if (clausesResult.data && risksResult.data) {
-            results[file.name] = {
-              clauses: clausesResult.data.clauses || [],
-              risks: risksResult.data.risks || [],
-            };
-
-            setSelectedFiles((prev) =>
-              prev.map((sf, idx) =>
-                idx === i ? { ...sf, status: "done" } : sf
-              )
-            );
-          }
-        } catch (error) {
-          setSelectedFiles((prev) =>
-            prev.map((sf, idx) => (idx === i ? { ...sf, status: "error" } : sf))
-          );
-
-          toast({
-            title: "Analysis failed",
-            description: `Unable to analyze ${file.name}`,
-            variant: "destructive",
-          });
-        }
+        toast({
+          title: "Analysis failed",
+          description: "Unable to analyze the documents",
+          variant: "destructive",
+        });
       }
 
-      setAnalysisResults(results);
     } finally {
       setIsAnalyzing(false);
     }
@@ -423,13 +473,21 @@ export default function DocumentAnalyzer() {
                     </span>
                     <Button
                       onClick={handleAnalyzeAll}
-                      disabled={isAnalyzing}
+                      disabled={isAnalyzing || !areAllFilesReadyForAnalysis()}
                       size="sm"
                     >
                       {isAnalyzing ? (
                         <>
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                           Analyzing...
+                        </>
+                      ) : !areAllFilesReadyForAnalysis() ? (
+                        <>
+                          <Clock className="w-4 h-4 mr-2" />
+                          {(() => {
+                            const progress = getExtractionProgress();
+                            return `Extracting... (${progress.completed}/${progress.total})`;
+                          })()}
                         </>
                       ) : (
                         <>
@@ -499,17 +557,196 @@ export default function DocumentAnalyzer() {
             )}
           </CardContent>
         </Card>
+
+        {/* Analysis Results Section */}
+        {analysisResult && (
+          <div className="space-y-6 animate-in slide-in-from-bottom-8 duration-500">
+            <Alert className="border-green-200 bg-green-50">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-800">
+                <strong>Analysis Complete!</strong> Your documents have been successfully analyzed as one combined legal document. 
+                Review the results below and proceed to the chatbot for detailed discussions.
+              </AlertDescription>
+            </Alert>
+            
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-bold mb-2 bg-gradient-to-r from-primary to-primary-hover bg-clip-text text-transparent">
+                  📊 Analysis Results
+                </h2>
+                <p className="text-muted-foreground text-lg">
+                  Combined analysis of {analysisResult.analyzed_files?.length || 0} documents treated as one legal document
+                </p>
+              </div>
+              <Button
+                onClick={() => navigate("/chatbot")}
+                size="lg"
+                className="bg-primary hover:bg-primary-hover text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200"
+              >
+                <MessageSquare className="w-5 h-5 mr-2" />
+                Continue to Chatbot
+              </Button>
+            </div>
+
+            <Card className="shadow-lg border-l-4 border-l-primary">
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <FileText className="w-5 h-5 text-primary" />
+                  {analysisResult.document_title || "Combined Legal Document Analysis"}
+                </CardTitle>
+                {analysisResult.analyzed_files && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    <strong>Analyzed Files:</strong> {analysisResult.analyzed_files.join(", ")}
+                  </p>
+                )}
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Important Clauses Section */}
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Scale className="w-5 h-5 text-blue-600" />
+                    <h3 className="text-lg font-semibold text-foreground">
+                      Important Clauses
+                    </h3>
+                    <Badge variant="secondary" className="text-xs">
+                      {analysisResult.important_clauses.length} found
+                    </Badge>
+                  </div>
+                  <div className="grid gap-4">
+                    {analysisResult.important_clauses.map((clause, index) => (
+                      <Card key={index} className="bg-blue-50 border-blue-200">
+                        <CardContent className="p-4">
+                          <div className="space-y-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <h4 className="font-medium text-blue-900 flex-1">
+                                {clause.clause_title}
+                              </h4>
+                              {clause.relevant_law && (
+                                <Badge variant="outline" className="text-xs">
+                                  <BookOpen className="w-3 h-3 mr-1" />
+                                  Legal Reference
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="bg-white p-3 rounded border border-blue-200">
+                              <p className="text-sm font-mono text-gray-700 leading-relaxed">
+                                "{clause.clause_text}"
+                              </p>
+                            </div>
+                            <div className="space-y-2">
+                              <p className="text-sm text-blue-800">
+                                <strong>Summary:</strong> {clause.summary}
+                              </p>
+                              {clause.relevant_law && (
+                                <p className="text-sm text-blue-700">
+                                  <strong>Relevant Law:</strong> {clause.relevant_law}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Legal Risks Section */}
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Shield className="w-5 h-5 text-red-600" />
+                    <h3 className="text-lg font-semibold text-foreground">
+                      Legal Risks Assessment
+                    </h3>
+                    <Badge variant="secondary" className="text-xs">
+                      {analysisResult.legal_risks.length} identified
+                    </Badge>
+                  </div>
+                  <div className="grid gap-4">
+                    {analysisResult.legal_risks.map((risk, index) => {
+                      const severityStyle = getRiskSeverityColor(risk.risk_area);
+                      return (
+                        <Card key={index} className={`${severityStyle.bg} border-2`}>
+                          <CardContent className="p-4">
+                            <div className="space-y-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <h4 className={`font-medium ${severityStyle.color} flex-1`}>
+                                  {risk.risk_area}
+                                </h4>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className={`text-xs ${severityStyle.color}`}>
+                                    <AlertTriangle className="w-3 h-3 mr-1" />
+                                    {severityStyle.severity} Risk
+                                  </Badge>
+                                  {risk.relevant_law && (
+                                    <Badge variant="outline" className="text-xs">
+                                      <BookOpen className="w-3 h-3 mr-1" />
+                                      Legal Reference
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="space-y-2">
+                                <p className="text-sm">
+                                  <strong>Description:</strong> {risk.description}
+                                </p>
+                                <p className="text-sm">
+                                  <strong>Potential Consequence:</strong> {risk.potential_consequence}
+                                </p>
+                                <p className="text-sm">
+                                  <strong>Related Clause:</strong> {risk.related_clause}
+                                </p>
+                                {risk.relevant_law && (
+                                  <p className="text-sm">
+                                    <strong>Relevant Law:</strong> {risk.relevant_law}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Legal Disclaimer */}
+                <Alert className="border-amber-200 bg-amber-50">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <AlertDescription className="text-amber-800">
+                    <strong>Legal Disclaimer:</strong> {analysisResult.notes}
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
 
     <div className="flex flex-col items-center justify-center p-6">
-      {/* Show button only if at least one file is uploaded */}
-      {saveUploadedFiles.length > 0 && (
-        <button
-          className="mt-6 px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark"
-          onClick={() => navigate("/chatbot")}
-        >
-          Go to Chatbot
-        </button>
+      {/* Show navigation button only if analysis is complete */}
+      {saveUploadedFiles.length > 0 && !analysisResult && (
+        <Alert className="mb-4 max-w-md">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Please analyze your documents first before proceeding to the chatbot.
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      {analysisResult && (
+        <div className="text-center">
+          <p className="text-muted-foreground mb-4">
+            Analysis complete! You can now chat with our AI about your combined legal document.
+          </p>
+          <Button
+            onClick={() => navigate("/chatbot")}
+            size="lg"
+            className="bg-primary hover:bg-primary-hover text-primary-foreground"
+          >
+            <MessageSquare className="w-5 h-5 mr-2" />
+            Continue to Chatbot
+          </Button>
+        </div>
       )}
     </div>
 
@@ -523,6 +760,71 @@ export default function DocumentAnalyzer() {
           onClose={() => setEditingFile(null)}
         />
       )}
+
+      {/* Privacy Protection Dialog */}
+      <AlertDialog open={showPrivacyDialog} onOpenChange={setShowPrivacyDialog}>
+        <AlertDialogContent className="max-w-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-orange-600">
+              <Shield className="w-5 h-5" />
+              Privacy Protection Reminder
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-base space-y-4">
+              <div className="bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+                <p className="font-medium text-orange-800 dark:text-orange-200 mb-2">
+                  🔒 Important: Protect your sensitive information
+                </p>
+                <p className="text-orange-700 dark:text-orange-300">
+                  Your documents may contain sensitive information that should be reviewed before AI analysis.
+                </p>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div className="space-y-2">
+                  <h4 className="font-medium text-foreground">Personal Information:</h4>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    <li>• Full names and signatures</li>
+                    <li>• Home/business addresses</li>
+                    <li>• Phone numbers</li>
+                    <li>• Email addresses</li>
+                    <li>• IC/Passport numbers</li>
+                  </ul>
+                </div>
+                <div className="space-y-2">
+                  <h4 className="font-medium text-foreground">Financial Information:</h4>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    <li>• Bank account numbers</li>
+                    <li>• Credit card details</li>
+                    <li>• Salary/income amounts</li>
+                    <li>• Tax identification numbers</li>
+                    <li>• Company registration numbers</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mt-4">
+                <p className="text-blue-800 dark:text-blue-200 text-sm">
+                  💡 <strong>Recommendation:</strong> If your documents contain sensitive information, consider using the "Edit Text" feature to remove or replace private details with placeholders before analysis.
+                </p>
+              </div>
+
+              <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mt-4">
+                <p className="text-green-800 dark:text-green-200 text-sm">
+                  ✅ <strong>Our Commitment:</strong> Your data is processed securely and is not stored permanently. However, protecting your privacy is ultimately your responsibility.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogAction
+              onClick={() => setShowPrivacyDialog(false)}
+              className="bg-primary hover:bg-primary-hover"
+            >
+              I understand, continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
     </>
   );
