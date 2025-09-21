@@ -129,6 +129,7 @@ const handleSendMessage = async () => {
     };
 
     setMessages((prev) => [...prev, assistantMessage]);
+    
   } catch (error) {
     console.error("Unexpected error:", error);
     const errorMessage: Message = {
