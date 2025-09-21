@@ -1,4 +1,7 @@
-// index.js
+/* Amplify Params - DO NOT EDIT
+	ENV
+	REGION
+Amplify Params - DO NOT EDIT */// index.js
 const { BedrockRuntimeClient, InvokeModelCommand } = require("@aws-sdk/client-bedrock-runtime");
 
 const bedrock = new BedrockRuntimeClient({ region: 'us-east-1' });

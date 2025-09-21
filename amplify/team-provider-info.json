@@ -64,19 +64,23 @@
       "function": {
         "bedrockTesting": {
           "deploymentBucketName": "amplify-legalmalaysiaai-devmhtwo-c620a-deployment",
-          "s3Key": "amplify-builds/bedrockTesting-556266796a4a36734f62-build.zip"
+          "s3Key": "amplify-builds/bedrockTesting-415376355373454d3635-build.zip"
         },
         "passTextToKendra": {
           "deploymentBucketName": "amplify-legalmalaysiaai-devmhtwo-c620a-deployment",
-          "s3Key": "amplify-builds/passTextToKendra-46356a6933765475766e-build.zip"
+          "s3Key": "amplify-builds/passTextToKendra-4f454f5536344d363333-build.zip"
         },
         "sendKendraSnippetsToBedrock": {
           "deploymentBucketName": "amplify-legalmalaysiaai-devmhtwo-c620a-deployment",
-          "s3Key": "amplify-builds/sendKendraSnippetsToBedrock-666f772f4a31686c6b4a-build.zip"
+          "s3Key": "amplify-builds/sendKendraSnippetsToBedrock-645233352f44556c4d6f-build.zip"
         },
         "testLambda": {
           "deploymentBucketName": "amplify-legalmalaysiaai-devmhtwo-c620a-deployment",
           "s3Key": "amplify-builds/testLambda-2b79394c386b6d4a2b34-build.zip"
+        },
+        "bedrockV2": {
+          "deploymentBucketName": "amplify-legalmalaysiaai-devmhtwo-c620a-deployment",
+          "s3Key": "amplify-builds/bedrockV2-576432655a5058363942-build.zip"
         }
       },
       "api": {

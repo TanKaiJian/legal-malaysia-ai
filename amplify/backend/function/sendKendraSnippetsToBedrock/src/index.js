@@ -1,11 +1,17 @@
 /* Amplify Params - DO NOT EDIT
 	ENV
 	REGION
+Amplify Params - DO NOT EDIT *//* Amplify Params - DO NOT EDIT
+	ENV
+	REGION
 Amplify Params - DO NOT EDIT */
-const { BedrockRuntimeClient, InvokeModelCommand } = require("@aws-sdk/client-bedrock-runtime");
+const {
+  BedrockRuntimeClient,
+  InvokeModelCommand,
+} = require("@aws-sdk/client-bedrock-runtime");
 
 // Initialize clients with proper regions
-const bedrock = new BedrockRuntimeClient({ region: 'us-east-1' });
+const bedrock = new BedrockRuntimeClient({ region: "us-east-1" });
 
 exports.handler = async (event) => {
   try {
@@ -39,23 +45,22 @@ exports.handler = async (event) => {
 
       Context from Kendra:
       ${contextText}
-
-      User Question:
-      ${userQuestion}
     `;
 
     // Prepare Bedrock command
     const command = new InvokeModelCommand({
-      modelId: 'qwen.qwen3-coder-30b-a3b-v1:0', // your model ID
-      contentType: 'application/json',
-      accept: 'application/json',
+      modelId: "qwen.qwen3-coder-30b-a3b-v1:0", // your model ID
+      contentType: "application/json",
+      accept: "application/json",
       body: JSON.stringify({
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userQuestion }
-        ]
-      })
+          { role: "user", content: userQuestion },
+        ],
+      }),
     });
+
+    console.log(command);
 
     // Call Bedrock model
     const response = await bedrock.send(command);
@@ -69,9 +74,9 @@ exports.handler = async (event) => {
       headers: {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "Content-Type",
-        "Access-Control-Allow-Methods": "OPTIONS,POST,GET"
+        "Access-Control-Allow-Methods": "OPTIONS,POST,GET",
       },
-      body: JSON.stringify({ answer: result })
+      body: JSON.stringify({ answer: result }),
     };
   } catch (error) {
     console.error("Error invoking Bedrock model:", error);
@@ -80,9 +85,12 @@ exports.handler = async (event) => {
       headers: {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "Content-Type",
-        "Access-Control-Allow-Methods": "OPTIONS,POST,GET"
+        "Access-Control-Allow-Methods": "OPTIONS,POST,GET",
       },
-      body: JSON.stringify({ error: 'Failed to invoke Bedrock model', details: error.message })
+      body: JSON.stringify({
+        error: "Failed to invoke Bedrock model",
+        details: error.message,
+      }),
     };
   }
 };

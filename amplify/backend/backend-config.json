@@ -34,6 +34,12 @@
   "function": {
     "bedrockTesting": {
       "build": true,
+      "dependsOn": [],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "bedrockV2": {
+      "build": true,
       "providerPlugin": "awscloudformation",
       "service": "Lambda"
     },
@@ -68,6 +74,22 @@
         {
           "category": "function",
           "resourceName": "bedrockTesting"
+        }
+      ]
+    },
+    "AMPLIFY_function_bedrockV2_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "bedrockV2"
+        }
+      ]
+    },
+    "AMPLIFY_function_bedrockV2_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "bedrockV2"
         }
       ]
     },
